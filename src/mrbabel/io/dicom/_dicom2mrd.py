@@ -22,7 +22,7 @@ DEFAULTS = {
 }
 
 # Lookup table for image types, configurable by vendor
-IMTYPE_MAPS: dict[str, dict[str, int]] = {
+IMTYPE_MAPS = {
     "default": {
         "M": mrd.ImageType.MAGNITUDE,
         "P": mrd.ImageType.PHASE,

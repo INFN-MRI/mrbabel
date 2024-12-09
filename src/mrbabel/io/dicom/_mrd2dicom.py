@@ -1,25 +1,34 @@
-"""Adapted from https://github.com/kspaceKelvin/python-ismrmrd-server/blob/master/mrd2dicom.py"""
+"""MRD to DICOM Conversion Utilities."""
 
-import os
+__all__ = [
+    "DEFAULTS",
+    "IMTYPE_MAPS",
+    "VENC_DIR_MAP",
+    "dump_dicom_images",
+]
+
+import base64
 import re
 
-import h5py
-import ismrmrd
+import mrd
 import numpy as np
 import pydicom
-import base64
 
-# Lookup table between DICOM and MRD mrdImg types
-imtype_map = {
-    ismrmrd.IMTYPE_MAGNITUDE: "M",
-    ismrmrd.IMTYPE_PHASE: "P",
-    ismrmrd.IMTYPE_REAL: "R",
-    ismrmrd.IMTYPE_IMAG: "I",
-    0: "M",
-}  # Fallback for unset value
+# Defaults for input arguments
+DEFAULTS = {
+    "out_group": "dataset",
+}
+
+# Lookup table for image types, configurable by vendor
+IMTYPE_MAPS = {
+    mrd.ImageType.MAGNITUDE: {"default": "M", "GE": 0},
+    mrd.ImageType.PHASE: {"default": "P", "GE": 1},
+    mrd.ImageType.REAL: {"default": "R", "GE": 2},
+    mrd.ImageType.IMAG: {"default": "I", "GE": 3},
+}
 
 # Lookup table between DICOM and Siemens flow directions
-venc_dir_map = {
+VENC_DIR_MAP = {
     "FLOW_DIR_R_TO_L": "rl",
     "FLOW_DIR_L_TO_R": "lr",
     "FLOW_DIR_A_TO_P": "ap",
@@ -31,358 +40,217 @@ venc_dir_map = {
 }
 
 
-def main(args):
-    dset = h5py.File(args.filename, "r")
-    if not dset:
-        print("Not a valid dataset: %s" % (args.filename))
-        return
+def dump_dicom_images(
+    dsets: list[pydicom.Dataset], mrdhead: mrd.Header
+) -> list[mrd.Acquisition]: ...
 
-    dsetNames = dset.keys()
-    print("File %s contains %d groups:" % (args.filename, len(dset.keys())))
-    print(" ", "\n  ".join(dsetNames))
 
-    if not args.in_group:
-        if len(dset.keys()) > 1:
-            print("Input group not specified -- selecting most recent")
-        args.in_group = list(dset.keys())[-1]
+def _dump_dicom_image(image, mrdhead):
 
-    if not args.out_folder:
-        args.out_folder = re.sub(".h5$", "", args.filename)
-        print("Output folder not specified -- using %s" % args.out_folder)
+    data = image.data
+    head = image.head
+    meta = image.meta
 
-    if args.in_group not in dset:
-        print("Could not find group %s" % (args.in_group))
-        return
-
-    if not os.path.exists(args.out_folder):
-        os.makedirs(args.out_folder)
-
-    group = dset.get(args.in_group)
-    print("Reading data from group '%s' in file '%s'" % (args.in_group, args.filename))
-
-    # mrdImg data is stored as:
-    #   /group/config              text of recon config parameters (optional)
-    #   /group/xml                 text of ISMRMRD flexible data header (optional)
-    #   /group/image_0/data        array of IsmrmrdImage data
-    #   /group/image_0/header      array of ImageHeader
-    #   /group/image_0/attributes  text of mrdImg MetaAttributes
-
-    isImage = True
-    imageNames = group.keys()
-    print("Found %d mrdImg sub-groups: %s" % (len(imageNames), ", ".join(imageNames)))
-
-    for imageName in imageNames:
-        if (
-            (imageName == "xml")
-            or (imageName == "config")
-            or (imageName == "config_file")
-        ):
-            continue
-
-        mrdImg = group[imageName]
-        if not (
-            ("data" in mrdImg) and ("header" in mrdImg) and ("attributes" in mrdImg)
-        ):
-            isImage = False
-
-    dset.close()
-
-    if isImage is False:
-        print("File does not contain properly formatted MRD raw or mrdImg data")
-        return
-
-    dset = ismrmrd.Dataset(args.filename, args.in_group, False)
-
-    groups = dset.list()
-
-    if "xml" in groups:
-        xml_header = dset.read_xml_header()
-        xml_header = xml_header.decode("utf-8")
-        mrdHead = ismrmrd.xsd.CreateFromDocument(xml_header)
+    # Use previously JSON serialized header as a starting point, if available
+    if meta.get("dicom_json") is not None:
+        dset = pydicom.dataset.Dataset.from_json(base64.b64decode(meta["DicomJson"]))
     else:
-        mrdHead = ismrmrd.xsd.ismrmrdHeader()
+        dset = pydicom.dataset.Dataset()
 
-    filesWritten = 0
-    for group in groups:
-        if (group == "config") or (group == "config_file") or (group == "xml"):
-            continue
+    # Enforce explicit little endian for written DICOM files
+    dset.file_meta = pydicom.dataset.FileMetaDataset()
+    dset.file_meta.TransferSyntaxUID = pydicom.uid.ExplicitVRLittleEndian
+    dset.file_meta.MediaStorageSOPClassUID = pydicom.uid.MRImageStorage
+    dset.file_meta.MediaStorageSOPInstanceUID = pydicom.uid.generate_uid()
+    pydicom.dataset.validate_file_meta(dset.file_meta)
 
-        print("Reading images from '/" + args.in_group + "/" + group + "'")
+    # FileMetaInformationGroupLength is still missing?
+    dset.is_little_endian = True
+    dset.is_implicit_VR = False
 
-        for imgNum in range(0, dset.number_of_images(group)):
-            mrdImg = dset.read_image(group, imgNum)
-            meta = ismrmrd.Meta.deserialize(mrdImg.attribute_string)
-
-            if (mrdImg.data.shape[0] == 3) and (mrdImg.getHead().image_type == 6):
-                # RGB images
-                print("RGB data not yet supported")
-                continue
-            else:
-                if mrdImg.data.shape[1] != 1:
-                    print("Multi-slice data not yet supported")
-                    continue
-
-                if mrdImg.data.shape[0] != 1:
-                    print("Multi-channel data not yet supported")
-                    continue
-
-                # Use previously JSON serialized header as a starting point, if available
-                if meta.get("DicomJson") is not None:
-                    dicomDset = pydicom.dataset.Dataset.from_json(
-                        base64.b64decode(meta["DicomJson"])
-                    )
-                else:
-                    dicomDset = pydicom.dataset.Dataset()
-                dicomDset = pydicom.dataset.Dataset()
-
-                # Enforce explicit little endian for written DICOM files
-                dicomDset.file_meta = pydicom.dataset.FileMetaDataset()
-                dicomDset.file_meta.TransferSyntaxUID = (
-                    pydicom.uid.ExplicitVRLittleEndian
+    # ----- Update DICOM header from MRD header -----
+    try:
+        if mrdhead.measurement_information is None:
+            pass
+        else:
+            if mrdhead.measurementInformation.measurementID is not None:
+                dset.SeriesInstanceUID = mrdhead.measurementInformation.measurementID
+            if mrdhead.measurementInformation.patientPosition is not None:
+                dset.PatientPosition = (
+                    mrdhead.measurementInformation.patientPosition.name
                 )
-                dicomDset.file_meta.MediaStorageSOPClassUID = pydicom.uid.MRImageStorage
-                dicomDset.file_meta.MediaStorageSOPInstanceUID = (
-                    pydicom.uid.generate_uid()
+            if mrdhead.measurementInformation.protocolName is not None:
+                dset.SeriesDescription = mrdhead.measurementInformation.protocolName
+            if mrdhead.measurementInformation.frameOfReferenceUID is not None:
+                dset.FrameOfReferenceUID = (
+                    mrdhead.measurementInformation.frameOfReferenceUID
                 )
-                pydicom.dataset.validate_file_meta(dicomDset.file_meta)
-                # FileMetaInformationGroupLength is still missing?
-                dicomDset.is_little_endian = True
-                dicomDset.is_implicit_VR = False
 
-                # ----- Update DICOM header from MRD header -----
-                try:
-                    if mrdHead.measurementInformation is None:
-                        pass
-                        # print("  MRD header does not contain measurementInformation section")
-                    else:
-                        # print("---------- Old -------------------------")
-                        # print("SeriesInstanceUID  : %s" % dicomDset.SeriesInstanceUID   )
-                        # print("PatientPosition    : %s" % dicomDset.PatientPosition     )
-                        # print("SeriesDescription  : %s" % dicomDset.SeriesDescription   )
-                        # print("FrameOfReferenceUID: %s" % dicomDset.FrameOfReferenceUID )
+            # print("---------- New -------------------------")
+            # print("SeriesInstanceUID  : %s" % dset.SeriesInstanceUID   )
+            # print("PatientPosition    : %s" % dset.PatientPosition     )
+            # print("SeriesDescription  : %s" % dset.SeriesDescription   )
+            # print("FrameOfReferenceUID: %s" % dset.FrameOfReferenceUID )
+    except:
+        print(
+            "Error setting header information from MRD header's measurementInformation section"
+        )
 
-                        if mrdHead.measurementInformation.measurementID is not None:
-                            dicomDset.SeriesInstanceUID = (
-                                mrdHead.measurementInformation.measurementID
-                            )
-                        if mrdHead.measurementInformation.patientPosition is not None:
-                            dicomDset.PatientPosition = (
-                                mrdHead.measurementInformation.patientPosition.name
-                            )
-                        if mrdHead.measurementInformation.protocolName is not None:
-                            dicomDset.SeriesDescription = (
-                                mrdHead.measurementInformation.protocolName
-                            )
-                        if (
-                            mrdHead.measurementInformation.frameOfReferenceUID
-                            is not None
-                        ):
-                            dicomDset.FrameOfReferenceUID = (
-                                mrdHead.measurementInformation.frameOfReferenceUID
-                            )
+    try:
+        if mrdhead.acquisitionSystemInformation is None:
+            pass
+        else:
+            # print("---------- Old -------------------------")
+            # print("mrdhead.acquisitionSystemInformation.systemVendor         : %s" % mrdhead.acquisitionSystemInformation.systemVendor          )
+            # print("mrdhead.acquisitionSystemInformation.systemModel          : %s" % mrdhead.acquisitionSystemInformation.systemModel           )
+            # print("mrdhead.acquisitionSystemInformation.systemFieldStrength_T: %s" % mrdhead.acquisitionSystemInformation.systemFieldStrength_T )
+            # print("mrdhead.acquisitionSystemInformation.institutionName      : %s" % mrdhead.acquisitionSystemInformation.institutionName       )
+            # print("mrdhead.acquisitionSystemInformation.stationName          : %s" % mrdhead.acquisitionSystemInformation.stationName           )
 
-                        # print("---------- New -------------------------")
-                        # print("SeriesInstanceUID  : %s" % dicomDset.SeriesInstanceUID   )
-                        # print("PatientPosition    : %s" % dicomDset.PatientPosition     )
-                        # print("SeriesDescription  : %s" % dicomDset.SeriesDescription   )
-                        # print("FrameOfReferenceUID: %s" % dicomDset.FrameOfReferenceUID )
-                except:
-                    print(
-                        "Error setting header information from MRD header's measurementInformation section"
-                    )
-
-                try:
-                    if mrdHead.acquisitionSystemInformation is None:
-                        pass
-                    else:
-                        # print("---------- Old -------------------------")
-                        # print("mrdHead.acquisitionSystemInformation.systemVendor         : %s" % mrdHead.acquisitionSystemInformation.systemVendor          )
-                        # print("mrdHead.acquisitionSystemInformation.systemModel          : %s" % mrdHead.acquisitionSystemInformation.systemModel           )
-                        # print("mrdHead.acquisitionSystemInformation.systemFieldStrength_T: %s" % mrdHead.acquisitionSystemInformation.systemFieldStrength_T )
-                        # print("mrdHead.acquisitionSystemInformation.institutionName      : %s" % mrdHead.acquisitionSystemInformation.institutionName       )
-                        # print("mrdHead.acquisitionSystemInformation.stationName          : %s" % mrdHead.acquisitionSystemInformation.stationName           )
-
-                        if (
-                            mrdHead.acquisitionSystemInformation.systemVendor
-                            is not None
-                        ):
-                            dicomDset.Manufacturer = (
-                                mrdHead.acquisitionSystemInformation.systemVendor
-                            )
-                        if mrdHead.acquisitionSystemInformation.systemModel is not None:
-                            dicomDset.ManufacturerModelName = (
-                                mrdHead.acquisitionSystemInformation.systemModel
-                            )
-                        if (
-                            mrdHead.acquisitionSystemInformation.systemFieldStrength_T
-                            is not None
-                        ):
-                            dicomDset.MagneticFieldStrength = (
-                                mrdHead.acquisitionSystemInformation.systemFieldStrength_T
-                            )
-                        if (
-                            mrdHead.acquisitionSystemInformation.institutionName
-                            is not None
-                        ):
-                            dicomDset.InstitutionName = (
-                                mrdHead.acquisitionSystemInformation.institutionName
-                            )
-                        if mrdHead.acquisitionSystemInformation.stationName is not None:
-                            dicomDset.StationName = (
-                                mrdHead.acquisitionSystemInformation.stationName
-                            )
-
-                        # print("---------- New -------------------------")
-                        # print("mrdHead.acquisitionSystemInformation.systemVendor         : %s" % mrdHead.acquisitionSystemInformation.systemVendor          )
-                        # print("mrdHead.acquisitionSystemInformation.systemModel          : %s" % mrdHead.acquisitionSystemInformation.systemModel           )
-                        # print("mrdHead.acquisitionSystemInformation.systemFieldStrength_T: %s" % mrdHead.acquisitionSystemInformation.systemFieldStrength_T )
-                        # print("mrdHead.acquisitionSystemInformation.institutionName      : %s" % mrdHead.acquisitionSystemInformation.institutionName       )
-                        # print("mrdHead.acquisitionSystemInformation.stationName          : %s" % mrdHead.acquisitionSystemInformation.stationName           )
-                except:
-                    print(
-                        "Error setting header information from MRD header's acquisitionSystemInformation section"
-                    )
-
-                # Set mrdImg pixel data from MRD mrdImg
-                dicomDset.PixelData = np.squeeze(
-                    mrdImg.data
-                ).tobytes()  # mrdImg.data is [cha z y x] -- squeeze to [y x] for [row col]
-                dicomDset.Rows = mrdImg.data.shape[2]
-                dicomDset.Columns = mrdImg.data.shape[3]
-
-                if (mrdImg.data.dtype == "uint16") or (mrdImg.data.dtype == "int16"):
-                    dicomDset.BitsAllocated = 16
-                    dicomDset.BitsStored = 16
-                    dicomDset.HighBit = 15
-                elif (
-                    (mrdImg.data.dtype == "uint32")
-                    or (mrdImg.data.dtype == "int")
-                    or (mrdImg.data.dtype == "float32")
-                ):
-                    dicomDset.BitsAllocated = 32
-                    dicomDset.BitsStored = 32
-                    dicomDset.HighBit = 31
-                elif mrdImg.data.dtype == "float64":
-                    dicomDset.BitsAllocated = 64
-                    dicomDset.BitsStored = 64
-                    dicomDset.HighBit = 63
-                else:
-                    print("Unsupported data type: ", mrdImg.data.dtype)
-
-                dicomDset.SeriesNumber = mrdImg.image_series_index
-                dicomDset.InstanceNumber = mrdImg.image_index
-
-                # ----- Set some mandatory default values -----
-                if not "SamplesPerPixel" in dicomDset:
-                    dicomDset.SamplesPerPixel = 1
-
-                if not "PhotometricInterpretation" in dicomDset:
-                    dicomDset.PhotometricInterpretation = "MONOCHROME2"
-
-                if not "PixelRepresentation" in dicomDset:
-                    dicomDset.PixelRepresentation = 0  # Unsigned integer
-
-                if not "ImageType" in dicomDset:
-                    dicomDset.ImageType = ["ORIGINAL", "PRIMARY", "M"]
-
-                if not "SeriesNumber" in dicomDset:
-                    dicomDset.SeriesNumber = 1
-
-                if not "SeriesDescription" in dicomDset:
-                    dicomDset.SeriesDescription = ""
-
-                if not "InstanceNumber" in dicomDset:
-                    dicomDset.InstanceNumber = 1
-
-                # ----- Update DICOM header from MRD ImageHeader -----
-                dicomDset.ImageType[2] = imtype_map[mrdImg.image_type]
-                dicomDset.PixelSpacing = [
-                    float(mrdImg.field_of_view[0]) / mrdImg.data.shape[2],
-                    float(mrdImg.field_of_view[1]) / mrdImg.data.shape[3],
-                ]
-                dicomDset.SliceThickness = mrdImg.field_of_view[2]
-                dicomDset.ImagePositionPatient = [
-                    mrdImg.position[0],
-                    mrdImg.position[1],
-                    mrdImg.position[2],
-                ]
-                dicomDset.ImageOrientationPatient = [
-                    mrdImg.read_dir[0],
-                    mrdImg.read_dir[1],
-                    mrdImg.read_dir[2],
-                    mrdImg.phase_dir[0],
-                    mrdImg.phase_dir[1],
-                    mrdImg.phase_dir[2],
-                ]
-
-                time_sec = mrdImg.acquisition_time_stamp / 1000 / 2.5
-                hour = int(np.floor(time_sec / 3600))
-                min = int(np.floor((time_sec - hour * 3600) / 60))
-                sec = time_sec - hour * 3600 - min * 60
-                dicomDset.AcquisitionTime = "%02.0f%02.0f%09.6f" % (hour, min, sec)
-                dicomDset.TriggerTime = mrdImg.physiology_time_stamp[0] / 2.5
-
-                # ----- Update DICOM header from MRD Image MetaAttributes -----
-                if meta.get("SeriesDescription") is not None:
-                    dicomDset.SeriesDescription = meta["SeriesDescription"]
-
-                if meta.get("SeriesDescriptionAdditional") is not None:
-                    dicomDset.SeriesDescription = (
-                        dicomDset.SeriesDescription
-                        + meta["SeriesDescriptionAdditional"]
-                    )
-
-                if meta.get("ImageComment") is not None:
-                    dicomDset.ImageComment = "_".join(meta["ImageComment"])
-
-                if meta.get("ImageType") is not None:
-                    dicomDset.ImageType = meta["ImageType"]
-
-                if (meta.get("ImageRowDir") is not None) and (
-                    meta.get("ImageColumnDir") is not None
-                ):
-                    dicomDset.ImageOrientationPatient = [
-                        float(meta["ImageRowDir"][0]),
-                        float(meta["ImageRowDir"][1]),
-                        float(meta["ImageRowDir"][2]),
-                        float(meta["ImageColumnDir"][0]),
-                        float(meta["ImageColumnDir"][1]),
-                        float(meta["ImageColumnDir"][2]),
-                    ]
-
-                if meta.get("RescaleIntercept") is not None:
-                    dicomDset.RescaleIntercept = meta["RescaleIntercept"]
-
-                if meta.get("RescaleSlope") is not None:
-                    dicomDset.RescaleSlope = meta["RescaleSlope"]
-
-                if meta.get("WindowCenter") is not None:
-                    dicomDset.WindowCenter = meta["WindowCenter"]
-
-                if meta.get("WindowWidth") is not None:
-                    dicomDset.WindowWidth = meta["WindowWidth"]
-
-                if meta.get("EchoTime") is not None:
-                    dicomDset.EchoTime = meta["EchoTime"]
-
-                if meta.get("InversionTime") is not None:
-                    dicomDset.InversionTime = meta["InversionTime"]
-
-                # Unhandled fields:
-                # LUTFileName
-                # ROI
-
-                # Write DICOM files
-                fileName = "%02.0f_%s_%03.0f.dcm" % (
-                    dicomDset.SeriesNumber,
-                    dicomDset.SeriesDescription,
-                    dicomDset.InstanceNumber,
+            if mrdhead.acquisitionSystemInformation.systemVendor is not None:
+                dset.Manufacturer = mrdhead.acquisitionSystemInformation.systemVendor
+            if mrdhead.acquisitionSystemInformation.systemModel is not None:
+                dset.ManufacturerModelName = (
+                    mrdhead.acquisitionSystemInformation.systemModel
                 )
-                print("  Writing file %s" % fileName)
-                dicomDset.save_as(
-                    os.path.join(args.out_folder, fileName), enforce_file_format=True
+            if mrdhead.acquisitionSystemInformation.systemFieldStrength_T is not None:
+                dset.MagneticFieldStrength = (
+                    mrdhead.acquisitionSystemInformation.systemFieldStrength_T
                 )
-                filesWritten += 1
+            if mrdhead.acquisitionSystemInformation.institutionName is not None:
+                dset.InstitutionName = (
+                    mrdhead.acquisitionSystemInformation.institutionName
+                )
+            if mrdhead.acquisitionSystemInformation.stationName is not None:
+                dset.StationName = mrdhead.acquisitionSystemInformation.stationName
 
-    print("Wrote %d DICOM files to %s" % (filesWritten, args.out_folder))
-    return
+            # print("---------- New -------------------------")
+            # print("mrdhead.acquisitionSystemInformation.systemVendor         : %s" % mrdhead.acquisitionSystemInformation.systemVendor          )
+            # print("mrdhead.acquisitionSystemInformation.systemModel          : %s" % mrdhead.acquisitionSystemInformation.systemModel           )
+            # print("mrdhead.acquisitionSystemInformation.systemFieldStrength_T: %s" % mrdhead.acquisitionSystemInformation.systemFieldStrength_T )
+            # print("mrdhead.acquisitionSystemInformation.institutionName      : %s" % mrdhead.acquisitionSystemInformation.institutionName       )
+            # print("mrdhead.acquisitionSystemInformation.stationName          : %s" % mrdhead.acquisitionSystemInformation.stationName           )
+    except:
+        print(
+            "Error setting header information from MRD header's acquisitionSystemInformation section"
+        )
+
+    # Set mrdImg pixel data from MRD mrdImg
+    dset.PixelData = np.squeeze(
+        data
+    ).tobytes()  # data is [cha z y x] -- squeeze to [y x] for [row col]
+    dset.Rows = data.shape[2]
+    dset.Columns = data.shape[3]
+
+    if (data.dtype == "uint16") or (data.dtype == "int16"):
+        dset.BitsAllocated = 16
+        dset.BitsStored = 16
+        dset.HighBit = 15
+    elif (data.dtype == "uint32") or (data.dtype == "int") or (data.dtype == "float32"):
+        dset.BitsAllocated = 32
+        dset.BitsStored = 32
+        dset.HighBit = 31
+    elif data.dtype == "float64":
+        dset.BitsAllocated = 64
+        dset.BitsStored = 64
+        dset.HighBit = 63
+    else:
+        print("Unsupported data type: ", data.dtype)
+
+    dset.SeriesNumber = mrdImg.image_series_index
+    dset.InstanceNumber = mrdImg.image_index
+
+    # ----- Set some mandatory default values -----
+    if not "SamplesPerPixel" in dset:
+        dset.SamplesPerPixel = 1
+
+    if not "PhotometricInterpretation" in dset:
+        dset.PhotometricInterpretation = "MONOCHROME2"
+
+    if not "PixelRepresentation" in dset:
+        dset.PixelRepresentation = 0  # Unsigned integer
+
+    if not "ImageType" in dset:
+        dset.ImageType = ["ORIGINAL", "PRIMARY", "M"]
+
+    if not "SeriesNumber" in dset:
+        dset.SeriesNumber = 1
+
+    if not "SeriesDescription" in dset:
+        dset.SeriesDescription = ""
+
+    if not "InstanceNumber" in dset:
+        dset.InstanceNumber = 1
+
+    # ----- Update DICOM header from MRD ImageHeader -----
+    dset.ImageType[2] = imtype_map[mrdImg.image_type]
+    dset.PixelSpacing = [
+        float(mrdImg.field_of_view[0]) / data.shape[2],
+        float(mrdImg.field_of_view[1]) / data.shape[3],
+    ]
+    dset.SliceThickness = mrdImg.field_of_view[2]
+    dset.ImagePositionPatient = [
+        mrdImg.position[0],
+        mrdImg.position[1],
+        mrdImg.position[2],
+    ]
+    dset.ImageOrientationPatient = [
+        mrdImg.read_dir[0],
+        mrdImg.read_dir[1],
+        mrdImg.read_dir[2],
+        mrdImg.phase_dir[0],
+        mrdImg.phase_dir[1],
+        mrdImg.phase_dir[2],
+    ]
+
+    time_sec = mrdImg.acquisition_time_stamp / 1000 / 2.5
+    hour = int(np.floor(time_sec / 3600))
+    min = int(np.floor((time_sec - hour * 3600) / 60))
+    sec = time_sec - hour * 3600 - min * 60
+    dset.AcquisitionTime = "%02.0f%02.0f%09.6f" % (hour, min, sec)
+    dset.TriggerTime = mrdImg.physiology_time_stamp[0] / 2.5
+
+    # ----- Update DICOM header from MRD Image MetaAttributes -----
+    if meta.get("SeriesDescription") is not None:
+        dset.SeriesDescription = meta["SeriesDescription"]
+
+    if meta.get("SeriesDescriptionAdditional") is not None:
+        dset.SeriesDescription = (
+            dset.SeriesDescription + meta["SeriesDescriptionAdditional"]
+        )
+
+    if meta.get("ImageComment") is not None:
+        dset.ImageComment = "_".join(meta["ImageComment"])
+
+    if meta.get("ImageType") is not None:
+        dset.ImageType = meta["ImageType"]
+
+    if (meta.get("ImageRowDir") is not None) and (
+        meta.get("ImageColumnDir") is not None
+    ):
+        dset.ImageOrientationPatient = [
+            float(meta["ImageRowDir"][0]),
+            float(meta["ImageRowDir"][1]),
+            float(meta["ImageRowDir"][2]),
+            float(meta["ImageColumnDir"][0]),
+            float(meta["ImageColumnDir"][1]),
+            float(meta["ImageColumnDir"][2]),
+        ]
+
+    if meta.get("RescaleIntercept") is not None:
+        dset.RescaleIntercept = meta["RescaleIntercept"]
+
+    if meta.get("RescaleSlope") is not None:
+        dset.RescaleSlope = meta["RescaleSlope"]
+
+    if meta.get("WindowCenter") is not None:
+        dset.WindowCenter = meta["WindowCenter"]
+
+    if meta.get("WindowWidth") is not None:
+        dset.WindowWidth = meta["WindowWidth"]
+
+    if meta.get("EchoTime") is not None:
+        dset.EchoTime = meta["EchoTime"]
+
+    if meta.get("InversionTime") is not None:
+        dset.InversionTime = meta["InversionTime"]
