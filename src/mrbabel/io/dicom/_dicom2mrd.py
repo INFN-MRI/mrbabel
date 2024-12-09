@@ -249,11 +249,21 @@ def read_dicom_images(
 
     # Get unique contrast and indexes and update mrd header
     unique_contrasts, contrast_idx = _get_unique_contrasts(contrasts)
-    mrdhead.sequence_parameters.flip_angle_deg = unique_contrasts[3]
-    mrdhead.sequence_parameters.t_r = unique_contrasts[2]
-    mrdhead.sequence_parameters.t_e = unique_contrasts[1]
+    mrdhead.sequence_parameters.flip_angle_deg = np.unique(unique_contrasts[3])
+    if len(mrdhead.sequence_parameters.flip_angle_deg) == 1:
+        mrdhead.sequence_parameters.flip_angle_deg = (
+            mrdhead.sequence_parameters.flip_angle_deg.item()
+        )
+    mrdhead.sequence_parameters.t_r = np.unique(unique_contrasts[2])
+    if len(mrdhead.sequence_parameters.t_r) == 1:
+        mrdhead.sequence_parameters.t_r = mrdhead.sequence_parameters.t_r.item()
+    mrdhead.sequence_parameters.t_e = np.unique(unique_contrasts[1])
+    if len(mrdhead.sequence_parameters.t_e) == 1:
+        mrdhead.sequence_parameters.t_e = mrdhead.sequence_parameters.t_e.item()
     if "InversionTime" in dsets[0]:
-        mrdhead.sequence_parameters.t_i = unique_contrasts[0]
+        mrdhead.sequence_parameters.t_i = np.unique(unique_contrasts[0])
+        if len(mrdhead.sequence_parameters.t_i) == 1:
+            mrdhead.sequence_parameters.t_i = mrdhead.sequence_parameters.t_i.item()
 
     # Get number of slices and update mrd header
     nslices = len(unique_slice_locations)
