@@ -55,4 +55,4 @@ def get_paths(ext: str, parent: Union[str, List[str]]) -> List[str]:
                     if file.endswith(f".{ext}"):
                         all_paths.append(os.path.abspath(os.path.join(root, file)))
 
-    return all_paths
+    return sorted(all_paths)

@@ -13,3 +13,5 @@ except Exception:
 
 
 __all__.append("testdata")
+
+from . import io
