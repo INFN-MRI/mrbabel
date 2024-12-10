@@ -24,8 +24,8 @@ def read_dicom(
 
     Parameters
     ----------
-    paths : list of str
-        List of file paths to DICOM files.
+    paths : str | list of str
+        Path or list of file paths to DICOM files.
     sort : bool, optional
         If ``True``, sort list of MRD Images into a MRD ImageArray.
         The default is ``True``.
@@ -38,7 +38,10 @@ def read_dicom(
         MRD Header parsed from DICOM files.
 
     """
-    paths = get_paths("dcm", paths)
+    if isinstance(paths, str) and paths.endswith(".dcm"):
+        paths = [paths]
+    else:
+        paths = get_paths("dcm", paths)
     with ThreadPool(multiprocessing.cpu_count()) as pool:
         dsets = pool.map(pydicom.dcmread, paths)
 

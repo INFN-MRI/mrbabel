@@ -7,16 +7,18 @@ import glob
 from typing import List, Union
 
 
-def get_paths(ext: str, parent: Union[str, List[str]]) -> List[str]:
+def get_paths(ext: str, parent: Union[str, List[str]], ext2: str = "") -> List[str]:
     """
     Recursively find all files with a specific extension in the given folder(s) or matching a folder path pattern.
 
     Parameters
     ----------
     ext : str
-        The file extension to search for (e.g., "dcm").
+        The file extension to search for (e.g., "nii").
     parent : str or list of str
         A folder path, a list of folder paths, or a path pattern (e.g., "my_folder/*").
+    ext2 : str, optional
+        Alternative file extension to search for (e.g., "nii.gz").
 
     Returns
     -------
@@ -52,7 +54,7 @@ def get_paths(ext: str, parent: Union[str, List[str]]) -> List[str]:
             )  # Normalize paths (e.g., remove trailing slashes)
             for root, _, files in os.walk(folder):
                 for file in files:
-                    if file.endswith(f".{ext}"):
+                    if file.endswith(f".{ext}") or file.endswith(f".{ext2}"):
                         all_paths.append(os.path.abspath(os.path.join(root, file)))
 
     return sorted(all_paths)

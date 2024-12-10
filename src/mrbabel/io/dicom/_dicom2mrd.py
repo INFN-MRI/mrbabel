@@ -70,7 +70,10 @@ def read_dicom_header(dset: pydicom.Dataset) -> mrd.Header:
     mrdhead.study_information = mrd.StudyInformationType()
     mrdhead.study_information.study_date = dset.StudyDate
     mrdhead.study_information.study_time = dset.StudyTime
-    mrdhead.study_information.study_id = dset.StudyID
+    try:
+        mrdhead.study_information.study_id = dset.StudyID
+    except Exception:
+        pass
     mrdhead.study_information.study_description = dset.StudyDescription
     mrdhead.study_information.study_instance_uid = dset.StudyInstanceUID
 
@@ -78,7 +81,10 @@ def read_dicom_header(dset: pydicom.Dataset) -> mrd.Header:
     mrdhead.measurement_information = mrd.MeasurementInformationType()
     mrdhead.measurement_information.measurement_id = dset.SeriesInstanceUID
     mrdhead.measurement_information.patient_position = dset.PatientPosition
-    mrdhead.measurement_information.protocol_name = dset.SeriesDescription
+    try:
+        mrdhead.measurement_information.protocol_name = dset.SeriesDescription
+    except Exception:
+        pass
     mrdhead.measurement_information.frame_of_reference_uid = dset.FrameOfReferenceUID
 
     # fill acquisition system information
@@ -268,7 +274,10 @@ def read_dicom_images(
 
     def get_image_type(item):
         if "GE" in vendor.upper():
-            return IMTYPE_MAPS["GE"][item[0x0043, 0x102F].value]
+            try:
+                return IMTYPE_MAPS["GE"][item[0x0043, 0x102F].value]
+            except Exception:
+                pass
         return IMTYPE_MAPS["default"][item.ImageType[2]]
 
     # get limits
@@ -310,12 +319,13 @@ def read_dicom_images(
         )
 
         # Fill acquisition timestamp
+        acquisition_time = "".join(dset.AcquisitionTime.split(":"))
         head.acquisition_time_stamp = round(
             (
-                int(dset.AcquisitionTime[0:2]) * 3600
-                + int(dset.AcquisitionTime[2:4]) * 60
-                + int(dset.AcquisitionTime[4:6])
-                + float(dset.AcquisitionTime[6:])
+                int(acquisition_time[0:2]) * 3600
+                + int(acquisition_time[2:4]) * 60
+                + int(acquisition_time[4:6])
+                + float(acquisition_time[6:])
             )
             * 1000
             / 2.5
@@ -361,19 +371,39 @@ def read_dicom_images(
 
             meta["FlowVelocity"] = float(venc.group(0))
             meta["FlowDirDisplay"] = VENC_DIR_MAP[dir.group(0)]
-        except:
+        except Exception:
             pass
 
         try:
             meta["ImageComments"] = dset.ImageComments
-        except:
+        except Exception:
             pass
 
-        meta["SeriesDescription"] = dset.SeriesDescription
+        try:
+            meta["SeriesDescription"] = dset.SeriesDescription
+        except Exception:
+            pass
 
         # Remove pixel data from pydicom class
-        data = dset.pixel_array.copy().astype(np.float32)
-        del dset["PixelData"]
+        try:
+            data = dset.pixel_array.copy().astype(np.float32)
+            del dset["PixelData"]
+        except Exception:
+            try:
+                data = (
+                    np.frombuffer(dset.FloatPixelData, dtype=np.float32)
+                    .copy()
+                    .reshape(dset.Rows, dset.Columns)
+                )
+                del dset["FloatPixelData"]
+            except Exception:
+                data = (
+                    np.frombuffer(dset.DoubleFloatPixelData, dtype=np.float64)
+                    .copy()
+                    .astype(np.float32)
+                    .reshape(dset.Rows)
+                )
+                del dset["DoubleFloatPixelData"]
 
         # Store the complete base64, json-formatted DICOM header so that non-MRD fields can be
         # recapitulated when generating DICOMs from MRD images
