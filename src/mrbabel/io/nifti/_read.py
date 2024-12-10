@@ -116,7 +116,9 @@ def read_nifti(
                     setattr(dicom.ds, keyword, json_list[idx][keyword])
                     
             # update image type
-            dicom.ds.ImageType.append(IMTYPE_MAPS[imtype[idx].name]["default"])
+            ImageType = dicom.ds.ImageType
+            ImageType = ImageType[:2] + [IMTYPE_MAPS[imtype[idx].name]["default"]] + ImageType[-1]
+            dicom.ds.ImageType = ImageType
 
             for instance_index in range(0, nii2dcm_parameters["NumberOfInstances"]):
                 transfer_nii_hdr_instance_tags(
