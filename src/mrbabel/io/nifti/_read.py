@@ -117,7 +117,7 @@ def read_nifti(
                     
             # update image type
             ImageType = dicom.ds.ImageType
-            ImageType = ImageType[:2] + [IMTYPE_MAPS[imtype[idx].name]["default"]] + ImageType[-1]
+            ImageType = ImageType[:2] + [IMTYPE_MAPS[imtype[idx].name]["default"]] + [ImageType[-1]]
             dicom.ds.ImageType = ImageType
 
             for instance_index in range(0, nii2dcm_parameters["NumberOfInstances"]):
