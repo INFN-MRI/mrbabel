@@ -250,20 +250,10 @@ def read_dicom_images(
     # Get unique contrast and indexes and update mrd header
     unique_contrasts, contrast_idx = _get_unique_contrasts(contrasts)
     mrdhead.sequence_parameters.flip_angle_deg = np.unique(unique_contrasts[3])
-    if len(mrdhead.sequence_parameters.flip_angle_deg) == 1:
-        mrdhead.sequence_parameters.flip_angle_deg = (
-            mrdhead.sequence_parameters.flip_angle_deg.item()
-        )
     mrdhead.sequence_parameters.t_r = np.unique(unique_contrasts[2])
-    if len(mrdhead.sequence_parameters.t_r) == 1:
-        mrdhead.sequence_parameters.t_r = mrdhead.sequence_parameters.t_r.item()
     mrdhead.sequence_parameters.t_e = np.unique(unique_contrasts[1])
-    if len(mrdhead.sequence_parameters.t_e) == 1:
-        mrdhead.sequence_parameters.t_e = mrdhead.sequence_parameters.t_e.item()
     if "InversionTime" in dsets[0]:
         mrdhead.sequence_parameters.t_i = np.unique(unique_contrasts[0])
-        if len(mrdhead.sequence_parameters.t_i) == 1:
-            mrdhead.sequence_parameters.t_i = mrdhead.sequence_parameters.t_i.item()
 
     # Get number of slices and update mrd header
     nslices = len(unique_slice_locations)
@@ -369,17 +359,17 @@ def read_dicom_images(
             venc = re.search(r"^\d+", dset.group(0))
             dir = re.search(r"(?<=\d)[^\d]*$", res.group(0))
 
-            meta["flow_velocity"] = float(venc.group(0))
-            meta["flow_dir_display"] = VENC_DIR_MAP[dir.group(0)]
+            meta["FlowVelocity"] = float(venc.group(0))
+            meta["FlowDirDisplay"] = VENC_DIR_MAP[dir.group(0)]
         except:
             pass
 
         try:
-            meta["image_comments"] = dset.ImageComments
+            meta["ImageComments"] = dset.ImageComments
         except:
             pass
 
-        meta["sequence_description"] = dset.SeriesDescription
+        meta["SeriesDescription"] = dset.SeriesDescription
 
         # Remove pixel data from pydicom class
         data = dset.pixel_array.copy().astype(np.float32)
