@@ -1,6 +1,6 @@
 """Sorting and Unsorting utilities."""
 
-__all__ = ["sort_images"]
+__all__ = ["sort_images", "unsort_images"]
 
 import numpy as np
 
@@ -9,7 +9,7 @@ import mrd
 
 def sort_images(images: list[mrd.Image]) -> mrd.ImageArray:
     """
-    Sort input set of MRD Images into a ImageArray.
+    Sort input set of MRD Images into a MRD ImageArray.
 
     This latter format is more suitable for volumetric processing.
 
@@ -82,3 +82,46 @@ def sort_images(images: list[mrd.Image]) -> mrd.ImageArray:
         data = data[0] * np.exp(1j * (2 * np.pi * data[1] / 4095 - np.pi))
 
     return mrd.ImageArray(data=data, headers=_headers, meta=_meta)
+
+
+def unsort_images(image: mrd.ImageArray) -> list[mrd.Image]:
+    """
+    Unsort input MRD ImageArray into a set of MRD Images.
+
+    This latter format is more suitable for I/O operations.
+
+    Parameters
+    ----------
+    image : mrd.ImageArray
+        Input MRD ImageArray.
+
+    Returns
+    -------
+    list[mrd.Images]
+        Stack of MRD Images corresponding to input.
+
+    """
+    _data = image.data
+    _headers = image.headers
+    _meta = image.meta
+
+    # fill images list
+    images = []
+    n_images = len(_headers)
+    for n in range(n_images):
+        imtype = _headers[n].image_type
+        contrast_idx = _headers[n].contrast
+        slice_idx = _headers[n].slice
+        if imtype == mrd.ImageType.COMPLEX:
+            data = _data[contrast_idx, slice_idx].squeeze()
+        if imtype == mrd.ImageType.MAGNITUDE:
+            data = np.abs(_data[contrast_idx, slice_idx]).squeeze()
+        if imtype == mrd.ImageType.PHASE:
+            data = np.angle(_data[contrast_idx, slice_idx]).squeeze()
+        if imtype == mrd.ImageType.REAL:
+            data = _data[contrast_idx, slice_idx].squeeze().real
+        if imtype == mrd.ImageType.IMAG:
+            data = _data[contrast_idx, slice_idx].squeeze().imag
+        images.append(mrd.Image(data=data, head=_headers[n], meta=_meta[n]))
+
+    return images

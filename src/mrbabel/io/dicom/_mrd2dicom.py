@@ -6,6 +6,7 @@ __all__ = [
     "dump_dicom_images",
 ]
 
+import warnings
 import base64
 
 import mrd
@@ -19,10 +20,10 @@ DEFAULTS = {
 
 # Lookup table for image types, configurable by vendor
 IMTYPE_MAPS = {
-    mrd.ImageType.MAGNITUDE: {"default": "M", "GE": 0},
-    mrd.ImageType.PHASE: {"default": "P", "GE": 1},
-    mrd.ImageType.REAL: {"default": "R", "GE": 2},
-    mrd.ImageType.IMAG: {"default": "I", "GE": 3},
+    "MAGNITUDE": {"default": "M", "GE": 0},
+    "PHASE": {"default": "P", "GE": 1},
+    "REAL": {"default": "R", "GE": 2},
+    "IMAG": {"default": "I", "GE": 3},
 }
 
 
@@ -75,8 +76,9 @@ def _dump_dicom_image(image, mrdhead):
             if mrdhead.patient_information.patient_gender is not None:
                 dset.PatientSex = mrdhead.patient_information.patient_gender
     except Exception:
-        raise ValueError(
-            "Error setting header information from MRD header's patient_information section"
+        warnings.warn(
+            "Unable to set header information from MRD header's patient_information section",
+            UserWarning,
         )
 
     # fill study information
@@ -95,9 +97,10 @@ def _dump_dicom_image(image, mrdhead):
             if mrdhead.study_information.study_instance_uid is not None:
                 dset.StudyInstanceUID = mrdhead.study_information.study_instance_uid
     except Exception:
-        raise ValueError(
-            "Error setting header information from MRD header's study_information section"
-        )
+        pass
+        # raise ValueError(
+        #     "Error setting header information from MRD header's study_information section"
+        # )
 
     # fill measurement information
     try:
@@ -117,8 +120,9 @@ def _dump_dicom_image(image, mrdhead):
                     mrdhead.measurement_information.frame_of_reference_uid
                 )
     except Exception:
-        raise ValueError(
-            "Error setting header information from MRD header's measurement_information section"
+        warnings.warn(
+            "Unable to set header information from MRD header's measurement_information section",
+            UserWarning,
         )
 
     # fill acquisition system information
@@ -146,8 +150,9 @@ def _dump_dicom_image(image, mrdhead):
             if mrdhead.acquisition_system_information.station_name is not None:
                 dset.StationName = mrdhead.acquisition_system_information.station_name
     except Exception:
-        ValueError(
-            "Error setting header information from MRD header's acquisition_system_information section"
+        warnings.warn(
+            "Unable to set information from MRD header's acquisition_system_information section",
+            UserWarning,
         )
 
     # fill experimental condition information

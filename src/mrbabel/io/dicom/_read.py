@@ -16,7 +16,9 @@ from ...data import sort_images
 from ._dicom2mrd import read_dicom_header, read_dicom_images
 
 
-def read_dicom(paths: list[str]) -> tuple[mrd.ImageArray, mrd.Header]:
+def read_dicom(
+    paths: list[str], sort: bool = True
+) -> tuple[mrd.ImageArray, mrd.Header]:
     """
     Read a list of DICOM files using a thread pool.
 
@@ -24,11 +26,14 @@ def read_dicom(paths: list[str]) -> tuple[mrd.ImageArray, mrd.Header]:
     ----------
     paths : list of str
         List of file paths to DICOM files.
+    sort : bool, optional
+        If ``True``, sort list of MRD Images into a MRD ImageArray.
+        The default is ``True``.
 
     Returns
     -------
-    image : list[mrd.Image]
-        MRD ImageArray parsed from DICOM files.
+    image : mrd.Image Array | list[mrd.Image]
+        MRD ImageArray  or list of MRD Images parsed from DICOM files.
     head : mrd.Head
         MRD Header parsed from DICOM files.
 
@@ -43,7 +48,7 @@ def read_dicom(paths: list[str]) -> tuple[mrd.ImageArray, mrd.Header]:
     # read images
     images, head = read_dicom_images(dsets, head)
 
-    # sort
-    image = sort_images(images)
+    if sort:
+        return sort_images(images), head
 
-    return image, head
+    return images, head
