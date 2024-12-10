@@ -9,6 +9,7 @@ __all__ = [
 ]
 
 import base64
+import copy
 import re
 import warnings
 
@@ -56,14 +57,20 @@ def read_dicom_header(dset: pydicom.Dataset) -> mrd.Header:
 
     # fill patient information
     mrdhead.subject_information = mrd.SubjectInformationType()
-    mrdhead.subject_information.patient_name = dset.PatientName
+    try:
+        mrdhead.subject_information.patient_name = dset.PatientName
+    except Exception:
+        pass
     mrdhead.subject_information.weight_kg = dset.PatientWeight
     try:
         mrdhead.subject_information.height_m = dset.PatientHeight
     except Exception:
         pass
     mrdhead.subject_information.patient_id = dset.PatientID
-    mrdhead.subject_information.patient_birthdate = dset.PatientBirthDate
+    try:
+        mrdhead.subject_information.patient_birthdate = dset.PatientBirthDate
+    except Exception:
+        pass
     mrdhead.subject_information.patient_gender = dset.PatientSex
 
     # fill study information
@@ -166,7 +173,7 @@ def read_dicom_header(dset: pydicom.Dataset) -> mrd.Header:
         enc.encoded_space.field_of_view_mm.z = slice_spacing
 
     # fill recon space
-    enc.recon_space = enc.encoded_space
+    enc.recon_space = copy.deepcopy(enc.encoded_space)
 
     # fill encoding limit
     enc.encoding_limits.kspace_encoding_step_0 = mrd.LimitType()
@@ -263,11 +270,11 @@ def read_dicom_images(
 
     # Get number of slices and update mrd header
     nslices = len(unique_slice_locations)
-    mrdhead.encoding[0].encoded_space.field_of_view_mm.z *= nslices
-    mrdhead.encoding[0].encoded_space.matrix_size.z *= nslices
+    mrdhead.encoding[-1].encoded_space.field_of_view_mm.z *= nslices
+    mrdhead.encoding[-1].encoded_space.matrix_size.z *= nslices
 
-    mrdhead.encoding[0].recon_space.field_of_view_mm.z *= nslices
-    mrdhead.encoding[0].recon_space.matrix_size.z *= nslices
+    mrdhead.encoding[-1].recon_space.field_of_view_mm.z *= nslices
+    mrdhead.encoding[-1].recon_space.matrix_size.z *= nslices
 
     # Get vendor as image type map depends on this
     vendor = dsets[0].Manufacturer
@@ -294,7 +301,7 @@ def read_dicom_images(
         # Get image type
         try:
             image_type = get_image_type(dset)
-        except:
+        except Exception:
             image_type = mrd.ImageType.MAGNITUDE
 
         # Initialize current image header
@@ -319,17 +326,20 @@ def read_dicom_images(
         )
 
         # Fill acquisition timestamp
-        acquisition_time = "".join(dset.AcquisitionTime.split(":"))
-        head.acquisition_time_stamp = round(
-            (
-                int(acquisition_time[0:2]) * 3600
-                + int(acquisition_time[2:4]) * 60
-                + int(acquisition_time[4:6])
-                + float(acquisition_time[6:])
+        try:
+            acquisition_time = "".join(dset.AcquisitionTime.split(":"))
+            head.acquisition_time_stamp = round(
+                (
+                    int(acquisition_time[0:2]) * 3600
+                    + int(acquisition_time[2:4]) * 60
+                    + int(acquisition_time[4:6])
+                    + float(acquisition_time[6:])
+                )
+                * 1000
+                / 2.5
             )
-            * 1000
-            / 2.5
-        )
+        except Exception:
+            pass
 
         # Fill trigger
         # try:

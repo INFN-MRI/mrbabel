@@ -102,4 +102,3 @@ def test_unsort_images_empty():
 
     result = unsort_images(empty_image_array)
     assert result == [], "Output should be an empty list for empty input."
-

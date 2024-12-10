@@ -35,7 +35,6 @@ def dump_dicom_images(
 
 
 def _dump_dicom_image(image, mrdhead):
-
     data = image.data
     head = image.head
     meta = image.meta

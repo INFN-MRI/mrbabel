@@ -7,6 +7,7 @@ import multiprocessing
 
 from multiprocessing.dummy import Pool as ThreadPool
 
+import numpy as np
 import mrd
 
 from ..._file_search import get_paths
@@ -38,10 +39,10 @@ def read_dicom(
         MRD Header parsed from DICOM files.
 
     """
-    if isinstance(paths, str) and paths.endswith(".dcm"):
+    if isinstance(paths, str) and paths.endswith(".dcm") or paths.endswith(".IMA"):
         paths = [paths]
     else:
-        paths = get_paths("dcm", paths)
+        paths = get_paths("dcm", paths, ext2="IMA")
     with ThreadPool(multiprocessing.cpu_count()) as pool:
         dsets = pool.map(pydicom.dcmread, paths)
 
@@ -52,6 +53,8 @@ def read_dicom(
     images, head = read_dicom_images(dsets, head)
 
     if sort:
-        return sort_images(images), head
+        image = sort_images(images)
+        image.data = np.flip(image.data, -3)
+        return image, head
 
     return images, head

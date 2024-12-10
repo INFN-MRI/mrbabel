@@ -54,7 +54,7 @@ def read_nifti(
         MRD Header parsed from NIfTI files.
 
     """
-    if isinstance(paths, str) and paths.endswith(".dcm"):
+    if isinstance(paths, str) and paths.endswith(".nii") or paths.endswith(".nii.gz"):
         nii_paths = [paths]
     else:
         nii_paths = get_paths("nii", paths, ext2="nii.gz")
@@ -114,11 +114,9 @@ def read_nifti(
                 keyword = keyword_for_tag(tag)
                 if keyword in json_list[idx]:
                     setattr(dicom.ds, keyword, json_list[idx][keyword])
-                    
+
             # update image type
-            ImageType = dicom.ds.ImageType
-            ImageType = ImageType[:2] + [IMTYPE_MAPS[imtype[idx].name]["default"]] + [ImageType[-1]]
-            dicom.ds.ImageType = ImageType
+            dicom.ds.ImageType.insert(2, IMTYPE_MAPS[imtype[idx].name]["default"])
 
             for instance_index in range(0, nii2dcm_parameters["NumberOfInstances"]):
                 transfer_nii_hdr_instance_tags(
@@ -141,7 +139,22 @@ def read_nifti(
 
     # convert dicoms to MRD
     images, head = read_dicom_images(dsets, head)
+
+    # fix units
+    if head.sequence_parameters:
+        if head.sequence_parameters.t_r.any():
+            head.sequence_parameters.t_r *= 1000.0
+        if head.sequence_parameters.t_e.any():
+            head.sequence_parameters.t_e *= 1000.0
+        if head.sequence_parameters.t_i.any():
+            if np.isclose(head.sequence_parameters.t_i, -1).any():
+                head.sequence_parameters.t_i = []
+            else:
+                head.sequence_parameters.t_i *= 1000.0
+
     if sort:
-        return sort_images(images), head
+        image = sort_images(images)
+        image.data = np.flip(image.data.swapaxes(-1, -2), (-2, -1))
+        return image, head
 
     return images, head

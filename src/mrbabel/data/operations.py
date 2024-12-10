@@ -75,6 +75,10 @@ def sort_images(images: list[mrd.Image]) -> mrd.ImageArray:
     if sum(image_types == 4) > 0:
         data[3] = np.zeros((n_contrasts, n_slices, ny, nx), dtype=np.float32)
 
+    for n in range(n_instances):
+        idx = image_types[n] - 1
+        data[idx][contrast_idx[n], slice_idx[n], :, :] = _data[n].astype(np.float32)
+
     # Real + 1j * Imag
     if sum(image_types == 3) > 0 and sum(image_types == 4) > 0:
         data = data[2] + 1j * data[3]
