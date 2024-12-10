@@ -83,7 +83,10 @@ def sort_images(images: list[mrd.Image]) -> mrd.ImageArray:
     if sum(image_types == 3) > 0 and sum(image_types == 4) > 0:
         data = data[2] + 1j * data[3]
     else:
-        data = data[0] * np.exp(1j * (2 * np.pi * data[1] / 4095 - np.pi))
+        if (data[1] > 2 * np.pi).any():
+            data = data[0] * np.exp(1j * (2 * np.pi * data[1] / 4095 - np.pi))
+        else:
+            data = data[0] * np.exp(1j * data[1])
 
     return mrd.ImageArray(data=data, headers=_headers, meta=_meta)
 
