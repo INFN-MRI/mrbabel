@@ -34,7 +34,7 @@ from ..dicom._mrd2dicom import IMTYPE_MAPS
 
 def read_nifti(
     paths: list[str], sort: bool = True
-) -> tuple[mrd.ImageArray, mrd.Header]:
+) -> tuple[mrd.ImageArray | list[mrd.Image], mrd.Header]:
     """
     Read a list of NIfTI files using a thread pool.
 
@@ -48,7 +48,7 @@ def read_nifti(
 
     Returns
     -------
-    image : mrd.Image Array | list[mrd.Image]
+    image : mrd.ImageArray | list[mrd.Image]
         MRD ImageArray  or list of MRD Images parsed from NIfTI files.
     head : mrd.Head
         MRD Header parsed from NIfTI files.

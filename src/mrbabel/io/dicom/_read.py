@@ -33,7 +33,7 @@ def read_dicom(
 
     Returns
     -------
-    image : mrd.Image Array | list[mrd.Image]
+    image : mrd.ImageArray | list[mrd.Image]
         MRD ImageArray  or list of MRD Images parsed from DICOM files.
     head : mrd.Head
         MRD Header parsed from DICOM files.
