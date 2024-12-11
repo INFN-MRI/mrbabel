@@ -5,7 +5,7 @@ import numpy as np
 
 import mrd
 
-from mrbabel.data.operations import unsort_images
+from mrbabel.data.sorting import unsort_images
 
 
 # Mock for MRD classes

@@ -28,8 +28,8 @@ from nii2dcm.dcm_writer import (
     transfer_nii_hdr_instance_tags,
 )
 
-from ..dicom._dicom2mrd import read_dicom_header, read_dicom_images
-from ..dicom._mrd2dicom import IMTYPE_MAPS
+from ..converters._dicom2mrd import read_dicom_header, read_dicom_images
+from ..converters._mrd2dicom import IMTYPE_MAPS
 
 
 def read_nifti(

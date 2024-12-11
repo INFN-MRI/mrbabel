@@ -6,7 +6,7 @@ import pydicom
 import numpy as np
 
 from unittest.mock import Mock
-from mrbabel.io.dicom._mrd2dicom import dump_dicom_images, _dump_dicom_image
+from mrbabel.io.converters._mrd2dicom import dump_dicom_images, _dump_dicom_image
 
 
 # Mock for MRD classes

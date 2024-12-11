@@ -1,10 +1,9 @@
-"""
-"""
+"""Data Types routines."""
 
 __all__ = []
 
-from . import operations
+from . import sorting
 
-from .operations import *  # noqa
+from .sorting import *  # noqa
 
-__all__.extend(operations.__all__)
+__all__.extend(sorting.__all__)

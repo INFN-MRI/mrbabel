@@ -12,7 +12,7 @@ import mrd
 from ...data import sort_kspace
 from ..._file_search import get_paths
 
-from ._ismrmd2mrd import read_ismrmrd_header, read_ismrmrd_acquisitions
+from ..converters._ismrmd2mrd import read_ismrmrd_header, read_ismrmrd_acquisitions
 
 
 def read_ismrmrd(
