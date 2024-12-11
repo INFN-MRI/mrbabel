@@ -43,6 +43,8 @@ def read_dicom(
         paths = [paths]
     else:
         paths = get_paths("dcm", paths, ext2="IMA")
+    if len(paths) == 0:
+        raise ValueError("DICOM files not found in target directory.")
     with ThreadPool(multiprocessing.cpu_count()) as pool:
         dsets = pool.map(pydicom.dcmread, paths)
 
@@ -53,7 +55,7 @@ def read_dicom(
     images, head = read_dicom_images(dsets, head)
 
     if sort:
-        image = sort_images(images)
+        image = sort_images(images, head)
         image.data = np.flip(image.data, -3)
         return image, head
 

@@ -7,7 +7,7 @@ import numpy as np
 import mrd
 
 
-def sort_images(images: list[mrd.Image]) -> mrd.ImageArray:
+def sort_images(images: list[mrd.Image], head: mrd.Header) -> mrd.ImageArray:
     """
     Sort input set of MRD Images into a MRD ImageArray.
 
@@ -15,8 +15,10 @@ def sort_images(images: list[mrd.Image]) -> mrd.ImageArray:
 
     Parameters
     ----------
-    images: list[mrd.Images]
+    images : list[mrd.Images]
         Input stack of MRD Images.
+    head : mrd.Header
+        MRD Header corresponding to input MRD Images.
 
     Returns
     -------
@@ -87,6 +89,15 @@ def sort_images(images: list[mrd.Image]) -> mrd.ImageArray:
             data = data[0] * np.exp(1j * (2 * np.pi * data[1] / 4095 - np.pi))
         else:
             data = data[0] * np.exp(1j * data[1])
+
+    if (
+        head.acquisition_system_information
+        and head.acquisition_system_information.system_vendor
+    ):
+        if "GE" in head.acquisition_system_information.system_vendor.upper():
+            data = np.fft.ifft(
+                np.fft.fftshift(np.fft.fft(data, axis=-3), axes=-3), axis=-3
+            )
 
     return mrd.ImageArray(data=data, headers=_headers, meta=_meta)
 

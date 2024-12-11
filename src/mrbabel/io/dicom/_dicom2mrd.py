@@ -285,7 +285,7 @@ def read_dicom_images(
                 return IMTYPE_MAPS["GE"][item[0x0043, 0x102F].value]
             except Exception:
                 pass
-        return IMTYPE_MAPS["default"][item.ImageType[2]]
+        return IMTYPE_MAPS["default"][item.ImageType[2][0]]
 
     # get limits
     mrdhead.encoding[0].encoding_limits.slice.maximum = nslices - 1

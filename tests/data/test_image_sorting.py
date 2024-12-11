@@ -2,6 +2,7 @@
 
 import pytest
 import numpy as np
+from types import SimpleNamespace
 
 import mrd
 
@@ -36,13 +37,18 @@ def create_mock_images():
     return _create_mock_images
 
 
+@pytest.fixture
+def head():
+    return SimpleNamespace(acquisition_system_information=None)
+
+
 # Test: Basic sorting functionality
-def test_sort_images_basic(create_mock_images):
+def test_sort_images_basic(create_mock_images, head):
     n_slices = 5
     n_contrasts = 3
     images = create_mock_images(n_slices, n_contrasts, mrd.ImageType.MAGNITUDE)
 
-    result = sort_images(images)
+    result = sort_images(images, head)
 
     # Validate dimensions
     assert result.data.shape == (
@@ -65,12 +71,12 @@ def test_sort_images_basic(create_mock_images):
 
 
 # Test: Complex-valued images
-def test_sort_images_complex(create_mock_images):
+def test_sort_images_complex(create_mock_images, head):
     n_slices = 4
     n_contrasts = 2
     images = create_mock_images(n_slices, n_contrasts, mrd.ImageType.COMPLEX)
 
-    result = sort_images(images)
+    result = sort_images(images, head)
 
     # Validate dimensions
     assert result.data.shape == (
@@ -85,14 +91,14 @@ def test_sort_images_complex(create_mock_images):
 
 
 # Test: Mixed real/imag images
-def test_sort_images_mixed_real_imag(create_mock_images):
+def test_sort_images_mixed_real_imag(create_mock_images, head):
     n_slices = 3
     n_contrasts = 2
     real_images = create_mock_images(n_slices, n_contrasts, mrd.ImageType.REAL)
     imag_images = create_mock_images(n_slices, n_contrasts, mrd.ImageType.IMAG)
     images = real_images + imag_images
 
-    result = sort_images(images)
+    result = sort_images(images, head)
 
     # Validate dimensions
     assert result.data.shape == (
@@ -107,10 +113,10 @@ def test_sort_images_mixed_real_imag(create_mock_images):
 
 
 # Test: Invalid input handling
-def test_sort_images_invalid_input(create_mock_images):
+def test_sort_images_invalid_input(create_mock_images, head):
     with pytest.raises(RuntimeError, match="Mixing real and complex-valued images"):
         # Create mixed real and complex images, which should raise an error
         real_images = create_mock_images(3, 2, mrd.ImageType.REAL)
         complex_images = create_mock_images(3, 2, mrd.ImageType.COMPLEX)
         images = real_images + complex_images
-        sort_images(images)
+        sort_images(images, head)

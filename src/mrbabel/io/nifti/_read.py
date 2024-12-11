@@ -58,6 +58,8 @@ def read_nifti(
         nii_paths = [paths]
     else:
         nii_paths = get_paths("nii", paths, ext2="nii.gz")
+    if len(nii_paths) == 0:
+        raise ValueError("NIfTI files not found in target directory.")
     with ThreadPool(multiprocessing.cpu_count()) as pool:
         nii = pool.map(nib.load, nii_paths)
 
@@ -116,7 +118,9 @@ def read_nifti(
                     setattr(dicom.ds, keyword, json_list[idx][keyword])
 
             # update image type
-            dicom.ds.ImageType.insert(2, IMTYPE_MAPS[imtype[idx].name]["default"])
+            vendor = dicom.ds.get("Manufacturer", "default")
+            if "GE" in vendor.upper():
+                dicom.ds.ImageType.insert(2, IMTYPE_MAPS[imtype[idx].name]["default"])
 
             for instance_index in range(0, nii2dcm_parameters["NumberOfInstances"]):
                 transfer_nii_hdr_instance_tags(
@@ -153,7 +157,7 @@ def read_nifti(
                 head.sequence_parameters.t_i *= 1000.0
 
     if sort:
-        image = sort_images(images)
+        image = sort_images(images, head)
         image.data = np.flip(image.data.swapaxes(-1, -2), (-2, -1))
         return image, head
 
