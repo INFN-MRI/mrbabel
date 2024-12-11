@@ -78,7 +78,7 @@ def read_ismrmrd_acquisition(
     acquisition.head.measurement_uid = acq.measurement_uid
     acquisition.head.scan_counter = acq.scan_counter
     acquisition.head.acquisition_time_stamp = acq.acquisition_time_stamp
-    acquisition.head.physiology_time_stamp = acq.physiology_time_stamp
+    acquisition.head.physiology_time_stamp = list(acq.physiology_time_stamp)
     for n in range(acq.active_channels):
         acquisition.head.channel_order.append(n)
 
@@ -88,14 +88,14 @@ def read_ismrmrd_acquisition(
     acquisition.head.encoding_space_ref = acq.encoding_space_ref
     acquisition.head.sample_time_us = acq.sample_time_us
 
-    acquisition.head.position = acq.position
-    acquisition.head.read_dir = acq.read_dir
-    acquisition.head.phase_dir = acq.phase_dir
-    acquisition.head.slice_dir = acq.slice_dir
-    acquisition.head.patient_table_position = acq.patient_table_position
+    acquisition.head.position = list(acq.position)
+    acquisition.head.read_dir = list(acq.read_dir)
+    acquisition.head.phase_dir = list(acq.phase_dir)
+    acquisition.head.slice_dir = list(acq.slice_dir)
+    acquisition.head.patient_table_position = list(acq.patient_table_position)
 
-    acquisition.head.user_int.extend(acq.user_int)
-    acquisition.head.user_float.extend(acq.user_float)
+    acquisition.head.user_int.extend(list(acq.user_int))
+    acquisition.head.user_float.extend(list(acq.user_float))
 
     # Resize the data structure (for example, using numpy arrays or lists)
     acquisition.data = acq.data
