@@ -30,32 +30,44 @@ def sort_images(images: list[mrd.Image], head: mrd.Header) -> mrd.ImageArray:
     _headers = np.asarray([img.head for img in images])
     _data = np.stack([img.data for img in images])
 
-    # get unique contrast and indexes
+    # Get unique contrast and indexes
     contrast_idx = np.asarray([img.head.contrast for img in images])
 
-    # get slice locations
+    # Get slice locations
     slice_idx = np.asarray([img.head.slice for img in images])
 
-    # get matrix size
+    # Get matrix size
     n_slices = len(np.unique(slice_idx))
     n_contrasts = len(np.unique(contrast_idx))
     n_instances, ny, nx = _data.shape
 
-    # fill sorted image tensor
+    # Fill sorted image tensor
     image_types = np.asarray([img.head.image_type.value for img in images])
+
+    # Initialize sorted headers and meta
+    headers = np.empty((n_contrasts, n_slices), dtype=object)
+    meta = np.empty((n_contrasts, n_slices), dtype=object)
 
     # Real-valued image
     if sum(image_types == 1) == n_instances:
         data = np.zeros((n_contrasts, n_slices, ny, nx), dtype=np.complex64)
         for n in range(n_instances):
             data[contrast_idx[n], slice_idx[n], :, :] = _data[n].astype(np.complex64)
-        return mrd.ImageArray(data=data, headers=_headers, meta=_meta)
+            headers[contrast_idx[n], slice_idx[n]] = _headers[n]
+            meta[contrast_idx[n], slice_idx[n]] = _meta[n]
+        return mrd.ImageArray(
+            data=data, headers=headers.ravel().tolist(), meta=meta.ravel().tolist()
+        )
 
     if sum(image_types == 3) == n_instances:
         data = np.zeros((n_contrasts, n_slices, ny, nx), dtype=np.complex64)
         for n in range(n_instances):
             data[contrast_idx[n], slice_idx[n], :, :] = _data[n].astype(np.complex64)
-        return mrd.ImageArray(data=data, headers=_headers, meta=_meta)
+            headers[contrast_idx[n], slice_idx[n]] = _headers[n]
+            meta[contrast_idx[n], slice_idx[n]] = _meta[n]
+        return mrd.ImageArray(
+            data=data, headers=headers.ravel().tolist(), meta=meta.ravel().tolist()
+        )
 
     # Complex images, i.e., assume all input images are complex
     if sum(image_types == 5) > 0:
@@ -64,7 +76,11 @@ def sort_images(images: list[mrd.Image], head: mrd.Header) -> mrd.ImageArray:
         data = np.zeros((n_contrasts, n_slices, ny, nx), dtype=np.complex64)
         for n in range(n_instances):
             data[contrast_idx[n], slice_idx[n], :, :] = _data[n].astype(np.complex64)
-        return mrd.ImageArray(data=data, headers=_headers, meta=_meta)
+            headers[contrast_idx[n], slice_idx[n]] = _headers[n]
+            meta[contrast_idx[n], slice_idx[n]] = _meta[n]
+        return mrd.ImageArray(
+            data=data, headers=headers.ravel().tolist(), meta=meta.ravel().tolist()
+        )
 
     # Complex images with separate magn/phase or real/imag
     data = [None, None, None, None]
@@ -80,6 +96,9 @@ def sort_images(images: list[mrd.Image], head: mrd.Header) -> mrd.ImageArray:
     for n in range(n_instances):
         idx = image_types[n] - 1
         data[idx][contrast_idx[n], slice_idx[n], :, :] = _data[n].astype(np.float32)
+        if idx == 0:  # keep header and meta from magnitude volume
+            headers[contrast_idx[n], slice_idx[n]] = _headers[n]
+            meta[contrast_idx[n], slice_idx[n]] = _meta[n]
 
     # Real + 1j * Imag
     if sum(image_types == 3) > 0 and sum(image_types == 4) > 0:
@@ -90,6 +109,7 @@ def sort_images(images: list[mrd.Image], head: mrd.Header) -> mrd.ImageArray:
         else:
             data = data[0] * np.exp(1j * data[1])
 
+    # Correct phase shift along z for GE systems
     if (
         head.acquisition_system_information
         and head.acquisition_system_information.system_vendor
@@ -99,7 +119,9 @@ def sort_images(images: list[mrd.Image], head: mrd.Header) -> mrd.ImageArray:
                 np.fft.fftshift(np.fft.fft(data, axis=-3), axes=-3), axis=-3
             )
 
-    return mrd.ImageArray(data=data, headers=_headers, meta=_meta)
+    return mrd.ImageArray(
+        data=data, headers=headers.ravel().tolist(), meta=meta.ravel().tolist()
+    )
 
 
 def sort_kspace(
@@ -133,7 +155,7 @@ def sort_kspace(
     _data = [[]] * n_encoded_spaces
     _headers = [[]] * n_encoded_spaces
 
-    # split data, headers and trajectories for the different encodings
+    # Split data, headers and trajectories for the different encodings
     for n in range(len(acquisitions)):
         idx = _encoding_spaces[n]
         if acquisitions[n].trajectory.size > 0:
@@ -142,7 +164,7 @@ def sort_kspace(
         _data[idx].append(acquisitions[n].data)
         _headers[idx].append(acquisitions[n].head)
 
-    # loop over encodings
+    # Loop over encodings
     recon_buffers = []
     for n in range(n_encoded_spaces):
         data = np.stack([d for d in _data[n]])
@@ -154,11 +176,11 @@ def sort_kspace(
             density = np.asarray([])
         headers = _headers[n]
 
-        # get contrast idx
+        # Get contrast idx
         contrast_idx = [head.idx.contrast for head in headers]
         contrast_idx = np.asarray([idx if idx else 0 for idx in contrast_idx])
 
-        # get slice idx
+        # Get slice idx
         slice_idx_1 = np.asarray([head.idx.slice for head in headers])
         slice_idx_2 = np.asarray([head.idx.kspace_encode_step_2 for head in headers])
 
@@ -168,17 +190,17 @@ def sort_kspace(
         if len(np.unique(slice_idx_1)) > len(np.unique(slice_idx_2)):
             slice_idx = slice_idx_1
 
-        # get phase idx
+        # Get phase idx
         phase_idx = np.asarray([head.idx.kspace_encode_step_1 for head in headers])
 
-        # get encoding size
+        # Get encoding size
         n_coils = data.shape[-2]
         n_pts = data.shape[-1]
         n_phases = len(np.unique(phase_idx))
         n_slices = len(np.unique(slice_idx))
         n_contrasts = len(np.unique(contrast_idx))
 
-        # sort data and trajectory
+        # Sort data and trajectory
         buffered_data = np.zeros(
             (
                 n_contrasts,
@@ -192,7 +214,7 @@ def sort_kspace(
         for idx in range(data.shape[0]):
             buffered_data[contrast_idx[idx], slice_idx[idx], phase_idx[idx]] = data[idx]
 
-        # reshape to (ncoils, n_contrasts, n_slices, n_phases, n_pts)
+        # Reshape to (ncoils, n_contrasts, n_slices, n_phases, n_pts)
         buffered_data = buffered_data.transpose(3, 0, 1, 2, 4)
 
         if trajectory.size > 0:
@@ -227,7 +249,7 @@ def sort_kspace(
             buffered_trajectory = None
             buffered_density = None
 
-        # prepare sampling description
+        # Prepare sampling description
         sampling = mrd.SamplingDescription()
         sampling.encoded_fov.x = head.encoding[n].encoded_space.field_of_view_mm.x
         sampling.encoded_fov.y = head.encoding[n].encoded_space.field_of_view_mm.y
@@ -288,7 +310,7 @@ def unsort_images(image: mrd.ImageArray) -> list[mrd.Image]:
     _headers = image.headers
     _meta = image.meta
 
-    # fill images list
+    # Fill images list
     images = []
     n_images = len(_headers)
     for n in range(n_images):
@@ -332,14 +354,14 @@ def unsort_kspace(
     if isinstance(recon_buffers, mrd.ReconBuffer):
         recon_buffers = [recon_buffers]
 
-    # get total number of scans
+    # Get total number of scans
     scan_count = []
     for buffer in recon_buffers:
         for head in buffer.headers:
             scan_count.append(head.scan_counter)
     n_scans = max(scan_count) + 1
 
-    # fill acquisitions
+    # Fill acquisitions
     acquisitions = [None] * n_scans
     for buffer in recon_buffers:
         data = buffer.data.transpose(1, 2, 3, 0, 4)
@@ -350,15 +372,15 @@ def unsort_kspace(
         else:
             trajectory = None
 
-        # get scan count
+        # Get scan count
         scan_idx = [head.scan_counter for head in buffer.headers]
         scan_idx = np.asarray(scan_idx)
 
-        # get contrast idx
+        # Get contrast idx
         contrast_idx = [head.idx.contrast for head in buffer.headers]
         contrast_idx = np.asarray([idx if idx else 0 for idx in contrast_idx])
 
-        # get slice idx
+        # Get slice idx
         slice_idx_1 = np.asarray([head.idx.slice for head in buffer.headers])
         slice_idx_2 = np.asarray(
             [head.idx.kspace_encode_step_2 for head in buffer.headers]
@@ -370,7 +392,7 @@ def unsort_kspace(
         if len(np.unique(slice_idx_1)) > len(np.unique(slice_idx_2)):
             slice_idx = slice_idx_1
 
-        # get phase idx
+        # Get phase idx
         phase_idx = np.asarray(
             [head.idx.kspace_encode_step_1 for head in buffer.headers]
         )
@@ -385,7 +407,7 @@ def unsort_kspace(
                 _acq = mrd.Acquisition(head=buffer.headers[n], data=_data)
             acquisitions[scan_idx[n]] = _acq
 
-    # filter missing
+    # Filter missing
     acquisitions = [acq for acq in acquisitions if acq is not None]
 
     return acquisitions

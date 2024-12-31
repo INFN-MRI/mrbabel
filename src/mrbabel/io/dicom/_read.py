@@ -48,10 +48,10 @@ def read_dicom(
     with ThreadPool(multiprocessing.cpu_count()) as pool:
         dsets = pool.map(pydicom.dcmread, paths)
 
-    # initialize header
+    # Initialize header
     head = read_dicom_header(dsets[0])
 
-    # read images
+    # Read images
     images, head = read_dicom_images(dsets, head)
 
     if sort:
