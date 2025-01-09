@@ -9,6 +9,7 @@ import warnings
 import numpy as np
 
 import mrd
+import nii2dcm.dcm
 import nii2dcm.nii
 import nii2dcm.svr
 import pydicom

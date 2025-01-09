@@ -28,7 +28,7 @@ IMTYPE_MAPS = {
 
 
 def _convert_patient_position(PatientPosition):
-    return "".join(PatientPosition.name.split())
+    return "".join(PatientPosition.name.split("_"))
 
 
 def dump_dicom_images(
@@ -44,7 +44,7 @@ def _dump_dicom_image(image, mrdhead):
     meta = image.meta
 
     # Use previously JSON serialized header as a starting point, if available
-    if meta.get("dicom_json") is not None:
+    if meta.get("DicomJson") is not None:
         dset = pydicom.dataset.Dataset.from_json(base64.b64decode(meta["DicomJson"]))
     else:
         dset = pydicom.dataset.Dataset()
@@ -55,12 +55,6 @@ def _dump_dicom_image(image, mrdhead):
     dset.file_meta.MediaStorageSOPClassUID = pydicom.uid.MRImageStorage
     dset.file_meta.MediaStorageSOPInstanceUID = pydicom.uid.generate_uid()
     pydicom.dataset.validate_file_meta(dset.file_meta)
-
-    # FileMetaInformationGroupLength is still missing?
-    # DeprecationWarning: 'Dataset.is_little_endian' will be removed in v4.0, set the Transfer Syntax UID or use the 'little_endian' argument with Dataset.save_as() or dcmwrite() instead
-    # DeprecationWarning: 'Dataset.is_implicit_VR' will be removed in v4.0, set the Transfer Syntax UID or use the 'implicit_vr' argument with Dataset.save_as() or dcmwrite() instead
-    # dset.is_little_endian = True
-    # dset.is_implicit_VR = False
 
     # ----- Update DICOM header from MRD header -----
     # fill patient information

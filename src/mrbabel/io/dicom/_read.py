@@ -47,8 +47,14 @@ def read_dicom(
     if len(paths) == 0:
         raise ValueError("DICOM files not found in target directory.")
 
+    def dcmread(filename):
+        return pydicom.dcmread(
+            filename,
+            force=True,
+        )
+
     with ThreadPool(multiprocessing.cpu_count()) as pool:
-        dsets = pool.map(pydicom.dcmread, paths)
+        dsets = pool.map(dcmread, paths)
 
     # Initialize header
     head = read_dicom_header(dsets[0])

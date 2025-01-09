@@ -13,11 +13,9 @@ from multiprocessing.dummy import Pool as ThreadPool
 import numpy as np
 import mrd
 
-from ..._file_search import get_paths
-
 from ...data import unsort_images
 
-from ..converters._dicom2mrd import dump_dicom_images
+from ..converters._mrd2dicom import dump_dicom_images
 
 
 def write_dicom(
@@ -56,7 +54,12 @@ def write_dicom(
     ]
 
     def dcmwrite(filename, dataset):
-        pydicom.dcmwrite(filename, dataset, ittle_endian=True, implicit_VR=False)
+        pydicom.dcmwrite(
+            filename,
+            enforce_file_format=True,
+            little_endian=True,
+            implicit_vr=False,
+        )
 
     # Writing
     paths_dsets = [(paths[n], dsets[n]) for n in range(len(dsets))]
