@@ -26,7 +26,8 @@ def read_dicom(
     Parameters
     ----------
     paths : str | list of str
-        Path or list of file paths to DICOM files.
+        Path to DICOM folder or list of file paths to DICOM files.
+        Supports wildcard.
     sort : bool, optional
         If ``True``, sort list of MRD Images into a MRD ImageArray.
         The default is ``True``.
@@ -45,6 +46,7 @@ def read_dicom(
         paths = get_paths("dcm", paths, ext2="IMA")
     if len(paths) == 0:
         raise ValueError("DICOM files not found in target directory.")
+
     with ThreadPool(multiprocessing.cpu_count()) as pool:
         dsets = pool.map(pydicom.dcmread, paths)
 

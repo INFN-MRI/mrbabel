@@ -51,6 +51,10 @@ VENC_DIR_MAP = {
 }
 
 
+def _convert_patient_position(PatientPosition):
+    return mrd.PatientPosition[PatientPosition[0] + "_" + PatientPosition[1:]]
+
+
 def read_dicom_header(dset: pydicom.Dataset) -> mrd.Header:
     """Create MRD Header from a DICOM file."""
     mrdhead = mrd.Header()
@@ -61,9 +65,9 @@ def read_dicom_header(dset: pydicom.Dataset) -> mrd.Header:
         mrdhead.subject_information.patient_name = dset.PatientName
     except Exception:
         pass
-    mrdhead.subject_information.weight_kg = dset.PatientWeight
+    mrdhead.subject_information.patient_weight_kg = dset.PatientWeight
     try:
-        mrdhead.subject_information.height_m = dset.PatientHeight
+        mrdhead.subject_information.patient_height_m = dset.PatientHeight
     except Exception:
         pass
     mrdhead.subject_information.patient_id = dset.PatientID
@@ -71,7 +75,7 @@ def read_dicom_header(dset: pydicom.Dataset) -> mrd.Header:
         mrdhead.subject_information.patient_birthdate = dset.PatientBirthDate
     except Exception:
         pass
-    mrdhead.subject_information.patient_gender = dset.PatientSex
+    mrdhead.subject_information.patient_gender = mrd.PatientGender[dset.PatientSex]
 
     # fill study information
     mrdhead.study_information = mrd.StudyInformationType()
@@ -87,7 +91,9 @@ def read_dicom_header(dset: pydicom.Dataset) -> mrd.Header:
     # fill measurement information
     mrdhead.measurement_information = mrd.MeasurementInformationType()
     mrdhead.measurement_information.measurement_id = dset.SeriesInstanceUID
-    mrdhead.measurement_information.patient_position = dset.PatientPosition
+    mrdhead.measurement_information.patient_position = _convert_patient_position(
+        dset.PatientPosition
+    )
     try:
         mrdhead.measurement_information.protocol_name = dset.SeriesDescription
     except Exception:
@@ -366,13 +372,13 @@ def read_dicom_images(
         head.image_series_index = unique_series_numbers.tolist().index(
             dset.SeriesNumber
         )
-        head.image_index = dset.get("InstanceNumber", 0)
+        head.image_index = int(dset.get("InstanceNumber", 0))
         head.slice = slice_idx[n]
         # head.phase = trigger_idx[n]
         head.contrast = contrast_idx[n]
 
         # Fill current Meta values
-        meta = {}
+        meta = mrd.ImageMeta()
 
         try:
             res = re.search(r"(?<=_v).*$", dset.SequenceName)
@@ -417,7 +423,7 @@ def read_dicom_images(
 
         # Store the complete base64, json-formatted DICOM header so that non-MRD fields can be
         # recapitulated when generating DICOMs from MRD images
-        meta["dicom_json"] = base64.b64encode(dset.to_json().encode("utf-8")).decode(
+        meta["DicomJson"] = base64.b64encode(dset.to_json().encode("utf-8")).decode(
             "utf-8"
         )
 

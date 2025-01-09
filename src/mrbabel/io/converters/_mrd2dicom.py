@@ -27,6 +27,10 @@ IMTYPE_MAPS = {
 }
 
 
+def _convert_patient_position(PatientPosition):
+    return "".join(PatientPosition.name.split())
+
+
 def dump_dicom_images(
     images: list[mrd.Image], mrdhead: mrd.Header
 ) -> list[mrd.Acquisition]:
@@ -53,27 +57,29 @@ def _dump_dicom_image(image, mrdhead):
     pydicom.dataset.validate_file_meta(dset.file_meta)
 
     # FileMetaInformationGroupLength is still missing?
-    dset.is_little_endian = True
-    dset.is_implicit_VR = False
+    # DeprecationWarning: 'Dataset.is_little_endian' will be removed in v4.0, set the Transfer Syntax UID or use the 'little_endian' argument with Dataset.save_as() or dcmwrite() instead
+    # DeprecationWarning: 'Dataset.is_implicit_VR' will be removed in v4.0, set the Transfer Syntax UID or use the 'implicit_vr' argument with Dataset.save_as() or dcmwrite() instead
+    # dset.is_little_endian = True
+    # dset.is_implicit_VR = False
 
     # ----- Update DICOM header from MRD header -----
     # fill patient information
     try:
-        if mrdhead.patient_information is None:
+        if mrdhead.subject_information is None:
             pass
         else:
-            if mrdhead.patient_information.patient_name is not None:
-                dset.PatientName = mrdhead.patient_information.patient_name
-            if mrdhead.patient_information.weight_kg is not None:
-                dset.PatientWeight = mrdhead.patient_information.weight_kg
-            if mrdhead.patient_information.height_m is not None:
-                dset.PatientHeight = mrdhead.patient_information.height_m
-            if mrdhead.patient_information.patient_id is not None:
-                dset.PatientID = mrdhead.patient_information.patient_id
-            if mrdhead.patient_information.patient_birthdate is not None:
-                dset.PatientBirthDate = mrdhead.patient_information.patient_birthdate
-            if mrdhead.patient_information.patient_gender is not None:
-                dset.PatientSex = mrdhead.patient_information.patient_gender
+            if mrdhead.subject_information.patient_name is not None:
+                dset.PatientName = mrdhead.subject_information.patient_name
+            if mrdhead.subject_information.patient_weight_kg is not None:
+                dset.PatientWeight = mrdhead.subject_information.patient_weight_kg
+            if mrdhead.subject_information.patient_height_m is not None:
+                dset.PatientHeight = mrdhead.subject_information.patient_height_m
+            if mrdhead.subject_information.patient_id is not None:
+                dset.PatientID = mrdhead.subject_information.patient_id
+            if mrdhead.subject_information.patient_birthdate is not None:
+                dset.PatientBirthDate = mrdhead.subject_information.patient_birthdate
+            if mrdhead.subject_information.patient_gender is not None:
+                dset.PatientSex = mrdhead.subject_information.patient_gender.name
     except Exception:
         warnings.warn(
             "Unable to set header information from MRD header's patient_information section",
@@ -96,10 +102,10 @@ def _dump_dicom_image(image, mrdhead):
             if mrdhead.study_information.study_instance_uid is not None:
                 dset.StudyInstanceUID = mrdhead.study_information.study_instance_uid
     except Exception:
-        pass
-        # raise ValueError(
-        #     "Error setting header information from MRD header's study_information section"
-        # )
+        warnings.warn(
+            "Unable to set header information from MRD header's study_information section",
+            UserWarning,
+        )
 
     # fill measurement information
     try:
@@ -109,10 +115,10 @@ def _dump_dicom_image(image, mrdhead):
             if mrdhead.measurement_information.measurement_id is not None:
                 dset.SeriesInstanceUID = mrdhead.measurement_information.measurement_id
             if mrdhead.measurement_information.patient_position is not None:
-                dset.PatientPosition = (
-                    mrdhead.measurement_information.patient_position.name
+                dset.PatientPosition = _convert_patient_position(
+                    mrdhead.measurement_information.patient_position
                 )
-            if mrdhead.measurement_information.protocolName is not None:
+            if mrdhead.measurement_information.protocol_name is not None:
                 dset.SeriesDescription = mrdhead.measurement_information.protocol_name
             if mrdhead.measurement_information.frame_of_reference_uid is not None:
                 dset.FrameOfReferenceUID = (
@@ -163,8 +169,8 @@ def _dump_dicom_image(image, mrdhead):
     dset.PixelData = np.squeeze(
         data
     ).tobytes()  # data is [cha z y x] -- squeeze to [y x] for [row col]
-    dset.Rows = data.shape[2]
-    dset.Columns = data.shape[3]
+    dset.Rows = data.shape[-2]
+    dset.Columns = data.shape[-1]
 
     if (data.dtype == "uint16") or (data.dtype == "int16"):
         dset.BitsAllocated = 16
@@ -207,10 +213,17 @@ def _dump_dicom_image(image, mrdhead):
         dset.InstanceNumber = 1
 
     # ----- Update DICOM header from MRD ImageHeader -----
-    dset.ImageType[2] = IMTYPE_MAPS[head.image_type]
+    try:
+        if "GE" in dset.Manufacturer:
+            vendor = "GE"
+        else:
+            vendor = "default"
+    except Exception:
+        vendor = "default"
+    dset.ImageType[2] = IMTYPE_MAPS[head.image_type.name][vendor]
     dset.PixelSpacing = [
-        float(head.field_of_view[0]) / data.shape[2],
-        float(head.field_of_view[1]) / data.shape[3],
+        float(head.field_of_view[0]) / data.shape[-2],
+        float(head.field_of_view[1]) / data.shape[-1],
     ]
     dset.SliceThickness = head.field_of_view[2]
     dset.ImagePositionPatient = [
@@ -232,7 +245,7 @@ def _dump_dicom_image(image, mrdhead):
     min = int(np.floor((time_sec - hour * 3600) / 60))
     sec = time_sec - hour * 3600 - min * 60
     dset.AcquisitionTime = "%02.0f%02.0f%09.6f" % (hour, min, sec)
-    dset.TriggerTime = head.physiology_time_stamp[0] / 2.5
+    # dset.TriggerTime = head.physiology_time_stamp[0] / 2.5
 
     # ----- Update DICOM header from MRD Image MetaAttributes -----
     if meta.get("SeriesDescription") is not None:
@@ -275,14 +288,15 @@ def _dump_dicom_image(image, mrdhead):
 
     # setting sequence parameters
     if mrdhead.sequence_parameters is not None:
-        if mrdhead.sequence_parameters.flip_angle_deg:
-            dset.FlipAngle = mrdhead.sequence_parameters.flip_angle_deg
-        if mrdhead.sequence_parameters.t_r:
-            dset.RepetitionTime = mrdhead.sequence_parameters.t_r
-        if mrdhead.sequence_parameters.t_e:
-            dset.EchoTime = mrdhead.sequence_parameters.t_e
-        if mrdhead.sequence_parameters.t_i:
-            dset.InversionTime = mrdhead.sequence_parameters.t_i
+        idx = head.contrast
+        if any(mrdhead.sequence_parameters.flip_angle_deg):
+            dset.FlipAngle = mrdhead.sequence_parameters.flip_angle_deg[idx]
+        if any(mrdhead.sequence_parameters.t_r):
+            dset.RepetitionTime = mrdhead.sequence_parameters.t_r[idx]
+        if any(mrdhead.sequence_parameters.t_e):
+            dset.EchoTime = mrdhead.sequence_parameters.t_e[idx]
+        if any(mrdhead.sequence_parameters.t_i):
+            dset.InversionTime = mrdhead.sequence_parameters.t_i[idx]
 
     # setting spacing
     fov_z = mrdhead.encoding[-1].encoded_space.field_of_view_mm.z
