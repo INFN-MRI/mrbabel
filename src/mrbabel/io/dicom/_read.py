@@ -50,7 +50,7 @@ def read_dicom(
     def dcmread(filename):
         return pydicom.dcmread(
             filename,
-            force=True,
+            force=False,
         )
 
     with ThreadPool(multiprocessing.cpu_count()) as pool:

@@ -160,21 +160,34 @@ def _dump_dicom_image(image, mrdhead):
     )
 
     # Set dset pixel data from MRD Image data
-    dset.PixelData = np.squeeze(
-        data
-    ).tobytes()  # data is [cha z y x] -- squeeze to [y x] for [row col]
     dset.Rows = data.shape[-2]
     dset.Columns = data.shape[-1]
 
     if (data.dtype == "uint16") or (data.dtype == "int16"):
+        dset.PixelData = np.squeeze(
+            data
+        ).tobytes()  # data is [cha z y x] -- squeeze to [y x] for [row col]
         dset.BitsAllocated = 16
         dset.BitsStored = 16
         dset.HighBit = 15
-    elif (data.dtype == "uint32") or (data.dtype == "int") or (data.dtype == "float32"):
+    elif (data.dtype == "uint32") or (data.dtype == "int32") or (data.dtype == "int"):
+        dset.PixelData = np.squeeze(
+            data
+        ).tobytes()  # data is [cha z y x] -- squeeze to [y x] for [row col]
+        dset.BitsAllocated = 32
+        dset.BitsStored = 32
+        dset.HighBit = 31
+    elif data.dtype == "float32":
+        dset.FloatPixelData = np.squeeze(
+            data
+        ).tobytes()  # data is [cha z y x] -- squeeze to [y x] for [row col]
         dset.BitsAllocated = 32
         dset.BitsStored = 32
         dset.HighBit = 31
     elif data.dtype == "float64":
+        dset.DoubleFloatPixelData = np.squeeze(
+            data
+        ).tobytes()  # data is [cha z y x] -- squeeze to [y x] for [row col]
         dset.BitsAllocated = 64
         dset.BitsStored = 64
         dset.HighBit = 63

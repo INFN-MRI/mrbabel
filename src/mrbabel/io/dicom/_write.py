@@ -56,6 +56,7 @@ def write_dicom(
     def dcmwrite(filename, dataset):
         pydicom.dcmwrite(
             filename,
+            dataset,
             enforce_file_format=True,
             little_endian=True,
             implicit_vr=False,
@@ -64,7 +65,7 @@ def write_dicom(
     # Writing
     paths_dsets = [(paths[n], dsets[n]) for n in range(len(dsets))]
     with ThreadPool(multiprocessing.cpu_count()) as pool:
-        pool.starmap(pydicom.dcmwrite, paths_dsets)
+        pool.starmap(dcmwrite, paths_dsets)
 
 
 def _broadcast_sequence_parameters(head: mrd.Header) -> mrd.Header:

@@ -4,6 +4,7 @@ import pytest
 import pydicom
 
 import numpy as np
+import mrd
 
 from unittest.mock import Mock
 from mrbabel.io.converters._mrd2dicom import dump_dicom_images, _dump_dicom_image
@@ -20,7 +21,7 @@ class MockMRDImage:
 class MockMRDHeader:
     def __init__(
         self,
-        patient_information=None,
+        subject_information=None,
         study_information=None,
         measurement_information=None,
         acquisition_system_information=None,
@@ -28,7 +29,7 @@ class MockMRDHeader:
         sequence_parameters=None,
         encoding=None,
     ):
-        self.patient_information = patient_information
+        self.subject_information = subject_information
         self.study_information = study_information
         self.measurement_information = measurement_information
         self.acquisition_system_information = acquisition_system_information
@@ -41,10 +42,10 @@ class MockMRDHeader:
 def mock_mrd_header():
     """Creates a mock MRD header with necessary fields."""
     return MockMRDHeader(
-        patient_information=Mock(
+        subject_information=Mock(
             patient_name="John Doe",
-            weight_kg=70,
-            height_m=1.75,
+            patient_weight_kg=70,
+            patient_height_m=1.75,
             patient_id="12345",
             patient_birthdate="19800101",
             patient_gender="M",
@@ -70,7 +71,7 @@ def mock_mrd_header():
             station_name="Test Station",
         ),
         experimental_conditions=Mock(h1resonance_frequency_hz=123456789.0),
-        sequence_parameters=Mock(flip_angle_deg=30, t_r=2000, t_e=30, t_i=0),
+        sequence_parameters=Mock(flip_angle_deg=[30], t_r=[2000], t_e=[30], t_i=[0]),
         encoding=[
             Mock(
                 encoded_space=Mock(
@@ -90,13 +91,14 @@ def mock_mrd_images():
         head = Mock(
             image_series_index=1,
             image_index=i + 1,
-            image_type="MAGNITUDE",
+            image_type=mrd.ImageType["MAGNITUDE"],
             field_of_view=[240.0, 240.0, 5.0],
             position=[0.0, 0.0, i * 5.0],
             read_dir=[1.0, 0.0, 0.0],
             phase_dir=[0.0, 1.0, 0.0],
             acquisition_time_stamp=1000 * (i + 1),
             physiology_time_stamp=[0],
+            contrast=0,
         )
         meta = {"SeriesDescription": "Test Series", "ImageComment": [f"Slice {i}"]}
         images.append(MockMRDImage(data, head, meta))
@@ -115,7 +117,7 @@ def test_dump_dicom_images(mock_mrd_images, mock_mrd_header):
             dicom, pydicom.dataset.Dataset
         ), "Each output should be a DICOM Dataset."
         assert (
-            dicom.PatientName == mock_mrd_header.patient_information.patient_name
+            dicom.PatientName == mock_mrd_header.subject_information.patient_name
         ), "Patient name mismatch."
         assert dicom.Rows == 128, "Row count mismatch."
         assert dicom.Columns == 128, "Column count mismatch."
@@ -128,9 +130,9 @@ def test_dump_dicom_image(mock_mrd_images, mock_mrd_header):
         assert isinstance(
             dicom, pydicom.dataset.Dataset
         ), "Output should be a DICOM Dataset."
-        assert dicom.PixelData is not None, "PixelData should be populated."
+        assert dicom.pixel_array is not None, "PixelData should be populated."
         assert (
-            dicom.PatientName == mock_mrd_header.patient_information.patient_name
+            dicom.PatientName == mock_mrd_header.subject_information.patient_name
         ), "Patient name mismatch."
         assert dicom.Rows == 128, "Row count mismatch."
         assert dicom.Columns == 128, "Column count mismatch."

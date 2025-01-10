@@ -59,11 +59,11 @@ def test_read_dicom_header_basic(mock_dicom_dataset):
 
     # Assert patient information
     assert mrd_header.subject_information.patient_name == "John Doe"
-    assert mrd_header.subject_information.weight_kg == 70.0
-    assert mrd_header.subject_information.height_m == 1.75
+    assert mrd_header.subject_information.patient_weight_kg == 70.0
+    assert mrd_header.subject_information.patient_height_m == 1.75
     assert mrd_header.subject_information.patient_id == "12345"
     assert mrd_header.subject_information.patient_birthdate == "19800101"
-    assert mrd_header.subject_information.patient_gender == "M"
+    assert mrd_header.subject_information.patient_gender.name == "M"
 
     # Assert study information
     assert mrd_header.study_information.study_date == "20231206"
@@ -74,7 +74,7 @@ def test_read_dicom_header_basic(mock_dicom_dataset):
 
     # Assert measurement information
     assert mrd_header.measurement_information.measurement_id == "1.2.3.4.5.6.7"
-    assert mrd_header.measurement_information.patient_position == "HFS"
+    assert mrd_header.measurement_information.patient_position.name == "H_FS"
     assert mrd_header.measurement_information.protocol_name == "Test Series"
     assert (
         mrd_header.measurement_information.frame_of_reference_uid == "1.2.3.4.5.6.7.8"
@@ -107,7 +107,7 @@ def test_read_dicom_header_missing_optional_fields(mock_dicom_dataset):
     mrd_header = read_dicom_header(mock_dicom_dataset)
 
     # Height should be missing, InstitutionName should default to "Virtual"
-    assert hasattr(mrd_header.subject_information, "height_m") is False
+    assert mrd_header.subject_information.patient_height_m is None
     assert mrd_header.acquisition_system_information.institution_name == "Virtual"
 
 
