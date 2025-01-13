@@ -14,11 +14,10 @@ import mrd
 
 
 def read_ismrmrd_header(
-    hdr: ismrmrd.xsd.ismrmrdschema.ismrmrd.ismrmrdHeader, h: mrd.Header = None
+    hdr: ismrmrd.xsd.ismrmrdschema.ismrmrd.ismrmrdHeader,
 ) -> mrd.Header:
     """Create MRD Header from a ISMRMRD Header."""
-    if h is None:
-        h = mrd.Header()
+    h = mrd.Header()
 
     if hasattr(hdr, "version") and hdr.version:
         h.version = hdr.version
@@ -65,12 +64,9 @@ def read_ismrmrd_acquisitions(
     return [read_ismrmrd_acquisition(acq) for acq in acquisitions]
 
 
-def read_ismrmrd_acquisition(
-    acq: ismrmrd.Acquisition, acquisition: mrd.Acquisition = None
-) -> mrd.Acquisition:
+def read_ismrmrd_acquisition(acq: ismrmrd.Acquisition) -> mrd.Acquisition:
     """Create MRD Acquisition from a ISMRMRD Acquisition."""
-    if acquisition is None:
-        acquisition = mrd.Acquisition()
+    acquisition = mrd.Acquisition()
 
     # Fill in the header fields
     acquisition.head.flags = acq.flags
@@ -107,12 +103,9 @@ def read_ismrmrd_acquisition(
     return acquisition
 
 
-def read_ismrmrd_waveform(
-    wfm: ismrmrd.Waveform, waveform: mrd.Waveform = None
-) -> mrd.Waveform:
+def read_ismrmrd_waveform(wfm: ismrmrd.Waveform) -> mrd.Waveform:
     """Create MRD Waveform from a ISMRMRD Waveform."""
-    if waveform is None:
-        waveform = mrd.Waveform()
+    waveform = mrd.Waveform()
     waveform.flags = wfm.head.flags
     waveform.measurement_uid = wfm.head.measurement_uid
     waveform.scan_counter = wfm.head.scan_counter
@@ -150,9 +143,8 @@ def time_from_string(s):
         raise ValueError("Invalid time format")
 
 
-def convert_subject_information(subject_information, s=None):
-    if s is None:
-        s = mrd.SubjectInformationType()
+def convert_subject_information(subject_information):
+    s = mrd.SubjectInformationType()
 
     if subject_information.patientName:
         s.patient_name = subject_information.patientName
@@ -182,9 +174,8 @@ def convert_subject_information(subject_information, s=None):
     return s
 
 
-def convert_study_information(study_information, s=None):
-    if s is None:
-        s = mrd.StudyInformationType()
+def convert_study_information(study_information):
+    s = mrd.StudyInformationType()
 
     if (
         hasattr(study_information, "studyDate")
@@ -253,28 +244,23 @@ def patient_position_from_string(s: str) -> str:
         raise ValueError(f"Unknown Patient Position: {s}")
 
 
-def convert_three_dimensional_float(three_dimensional_float, t=None):
-    if t is None:
-        t = (
-            mrd.ThreeDimensionalFloat()
-        )  # Replace with actual mrd.ThreeDimensionalFloat initialization
+def convert_three_dimensional_float(three_dimensional_float):
+    t = mrd.ThreeDimensionalFloat()
     t.x = three_dimensional_float.x
     t.y = three_dimensional_float.y
     t.z = three_dimensional_float.z
     return t
 
 
-def convert_measurement_dependency(measurement_dependency, m=None):
-    if m is None:
-        m = mrd.MeasurementDependencyType()
+def convert_measurement_dependency(measurement_dependency):
+    m = mrd.MeasurementDependencyType()
     m.measurement_id = measurement_dependency.measurementID
     m.dependency_type = measurement_dependency.dependencyType
     return m
 
 
-def convert_measurement_information(measurement_information, m=None):
-    if m is None:
-        m = mrd.MeasurementInformationType()
+def convert_measurement_information(measurement_information):
+    m = mrd.MeasurementInformationType()
 
     if measurement_information.measurementID:
         m.measurement_id = measurement_information.measurementID
@@ -328,9 +314,8 @@ def convert_measurement_information(measurement_information, m=None):
     return m
 
 
-def convert_acquisition_system_information(a, asi=None):
-    if asi is None:
-        asi = mrd.AcquisitionSystemInformationType()
+def convert_acquisition_system_information(a):
+    asi = mrd.AcquisitionSystemInformationType()
 
     if a.systemVendor:
         asi.system_vendor = a.systemVendor
@@ -369,51 +354,45 @@ def convert_acquisition_system_information(a, asi=None):
     return asi
 
 
-def convert_experimental_conditions(e, ec=None):
-    if ec is None:
-        ec = mrd.ExperimentalConditionsType()
+def convert_experimental_conditions(e):
+    ec = mrd.ExperimentalConditionsType()
     ec.h1resonance_frequency_hz = e.H1resonanceFrequency_Hz
     return ec
 
 
-def convert_matrix_size(m, matrix_size=None):
-    if matrix_size is None:
-        matrix_size = mrd.MatrixSizeType()
+def convert_matrix_size(m):
+    matrix_size = mrd.MatrixSizeType()
     matrix_size.x = m.x
     matrix_size.y = m.y
     matrix_size.z = m.z
     return matrix_size
 
 
-def convert_field_of_view_mm(f, field_of_view=None):
-    if field_of_view is None:
-        field_of_view = mrd.FieldOfViewMm()
+def convert_field_of_view_mm(f):
+    field_of_view = mrd.FieldOfViewMm()
     field_of_view.x = f.x
     field_of_view.y = f.y
     field_of_view.z = f.z
     return field_of_view
 
 
-def convert_encoding_space(e, encoding_space=None):
-    if encoding_space is None:
-        encoding_space = mrd.EncodingSpaceType()
+def convert_encoding_space(e):
+    encoding_space = mrd.EncodingSpaceType()
     encoding_space.matrix_size = convert_matrix_size(e.matrixSize)
     encoding_space.field_of_view_mm = convert_field_of_view_mm(e.fieldOfView_mm)
     return encoding_space
 
 
-def convert_limit(l, limit=None):
-    if limit is None:
-        limit = mrd.LimitType()
+def convert_limit(l):
+    limit = mrd.LimitType()
     limit.minimum = l.minimum
     limit.maximum = l.maximum
     limit.center = l.center
     return limit
 
 
-def convert_encoding_limits(e, encoding_limits=None):
-    if encoding_limits is None:
-        encoding_limits = mrd.EncodingLimitsType()
+def convert_encoding_limits(e):
+    encoding_limits = mrd.EncodingLimitsType()
 
     if e.kspace_encoding_step_0:
         encoding_limits.kspace_encoding_step_0 = e.kspace_encoding_step_0
@@ -518,9 +497,8 @@ def interleaving_dimension_from_string(s):
         raise ValueError(f"Unknown InterleavingDimension: {s}")
 
 
-def convert_multiband_spacing(m, multiband_spacing=None):
-    if multiband_spacing is None:
-        multiband_spacing = mrd.MultibandSpacingType()
+def convert_multiband_spacing(m):
+    multiband_spacing = mrd.MultibandSpacingType()
     for s in m.dZ:
         multiband_spacing.d_z.append(s)
     return multiband_spacing
@@ -537,9 +515,8 @@ def convert_multiband_calibration_type(m):
         raise ValueError("Unknown Calibration")
 
 
-def convert_multiband(m, multiband=None):
-    if multiband is None:
-        multiband = mrd.MultibandType()
+def convert_multiband(m):
+    multiband = mrd.MultibandType()
     for s in m.spacing:
         multiband.spacing.append(convert_multiband_spacing(s))
     multiband.delta_kz = m.deltaKz
@@ -549,9 +526,8 @@ def convert_multiband(m, multiband=None):
     return multiband
 
 
-def convert_parallel_imaging(p, parallel_imaging=None):
-    if parallel_imaging is None:
-        parallel_imaging = mrd.ParallelImagingType()
+def convert_parallel_imaging(p):
+    parallel_imaging = mrd.ParallelImagingType()
     if p.accelerationFactor:
         parallel_imaging.acceleration_factor = convert_acceleration_factor(
             p.accelerationFactor
@@ -569,9 +545,8 @@ def convert_parallel_imaging(p, parallel_imaging=None):
     return parallel_imaging
 
 
-def convert_encoding(e, encoding=None):
-    if encoding is None:
-        encoding = mrd.EncodingType()
+def convert_encoding(e):
+    encoding = mrd.EncodingType()
     encoding.encoded_space = convert_encoding_space(e.encodedSpace)
     encoding.recon_space = convert_encoding_space(e.reconSpace)
     encoding.encoding_limits = convert_encoding_limits(e.encodingLimits)
@@ -636,26 +611,23 @@ def convert_diffusion_dimension(diffusion_dimension):
         raise ValueError("Unknown diffusion dimension")
 
 
-def convert_gradient_direction(g, gradient_direction=None):
-    if gradient_direction is None:
-        gradient_direction = mrd.GradientDirectionType()
+def convert_gradient_direction(g):
+    gradient_direction = mrd.GradientDirectionType()
     gradient_direction.rl = g.rl
     gradient_direction.ap = g.ap
     gradient_direction.fh = g.fh
     return gradient_direction
 
 
-def convert_diffusion(d, diffusion=None):
-    if diffusion is None:
-        diffusion = mrd.DiffusionType()
+def convert_diffusion(d):
+    diffusion = mrd.DiffusionType()
     diffusion.gradient_direction = convert_gradient_direction(d.gradient_direction)
     diffusion.bvalue = d.bvalue
     return diffusion
 
 
-def convert_sequence_parameters(s, sequence_parameters=None):
-    if sequence_parameters is None:
-        sequence_parameters = mrd.SequenceParametersType()
+def convert_sequence_parameters(s):
+    sequence_parameters = mrd.SequenceParametersType()
 
     if s.TR:
         sequence_parameters.t_r.extend(s.TR)
@@ -693,9 +665,8 @@ def convert_userbase64(u):
     return mrd.UserParameterBase64Type(name=u.name, value=u.value)
 
 
-def convert_user_parameters(u, user_parameters=None):
-    if user_parameters is None:
-        user_parameters = mrd.UserParametersType()
+def convert_user_parameters(u):
+    user_parameters = mrd.UserParametersType()
 
     # Assuming userParameterLong, userParameterDouble, userParameterString, userParameterBase64 are lists
     for p in u.userParameterLong:
@@ -730,9 +701,8 @@ def convert_waveform_type(w):
         raise ValueError(f"Unknown waveform type: {w}")
 
 
-def convert_waveform_information(w, waveform_information=None):
-    if waveform_information is None:
-        waveform_information = mrd.WaveformInformationType()
+def convert_waveform_information(w):
+    waveform_information = mrd.WaveformInformationType()
     waveform_information.waveform_name = w.waveformName
     waveform_information.waveform_type = convert_waveform_type(w.waveformType)
 
@@ -742,9 +712,8 @@ def convert_waveform_information(w, waveform_information=None):
     return waveform_information
 
 
-def convert_encoding_counters(e, encoding_counters=None):
-    if encoding_counters is None:
-        encoding_counters = mrd.EncodingCounters()
+def convert_encoding_counters(e):
+    encoding_counters = mrd.EncodingCounters()
     encoding_counters.kspace_encode_step_1 = e.kspace_encode_step_1
     encoding_counters.kspace_encode_step_2 = e.kspace_encode_step_2
     encoding_counters.average = e.average
