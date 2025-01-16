@@ -25,3 +25,9 @@ from . import ismrmrd  # noqa
 from .ismrmrd import *  # noqa
 
 __all__.extend(ismrmrd.__all__)
+
+from . import siemens  # noqa
+
+from .siemens import *  # noqa
+
+__all__.extend(siemens.__all__)

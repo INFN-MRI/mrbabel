@@ -2,6 +2,6 @@
 
 __all__ = []
 
-from ._read import read_ismrmrd
+from ._read import read_ismrmrd # noqa
 
 __all__.append("read_ismrmrd")

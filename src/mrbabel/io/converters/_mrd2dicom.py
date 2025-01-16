@@ -6,8 +6,9 @@ __all__ = [
     "dump_dicom_images",
 ]
 
-import warnings
 import base64
+import re
+import warnings
 
 import mrd
 import numpy as np
@@ -32,22 +33,32 @@ def _convert_patient_position(PatientPosition):
 
 
 def dump_dicom_images(
-    images: list[mrd.Image], mrdhead: mrd.Header
+    images: list[mrd.Image], 
+    mrdhead: mrd.Header,
+    dicomdict_path: str | None = None,
 ) -> list[mrd.Acquisition]:
     """Create list of DICOM files from MRD Header and a list of MRD images."""
-    return [_dump_dicom_image(image, mrdhead) for image in images]
+    return [_dump_dicom_image(image, mrdhead, dicomdict_path) for image in images]
 
 
-def _dump_dicom_image(image, mrdhead):
+def _dump_dicom_image(image, mrdhead, dicomdict_path):
     data = image.data
     head = image.head
     meta = image.meta
+    
+    # Parse the custom dictionary
+    custom_tags = _parse_custom_dictionary(dicomdict_path)
 
     # Use previously JSON serialized header as a starting point, if available
     if meta.get("DicomJson") is not None:
         dset = pydicom.dataset.Dataset.from_json(base64.b64decode(meta["DicomJson"]))
     else:
         dset = pydicom.dataset.Dataset()
+        # Add custom tags locally
+        for tag, (vr, name) in custom_tags.items():
+            # Assign some dummy values to the custom tags for demonstration
+            value = f"Value for {name}"
+            dset.add_new(tag, vr, value)
 
     # Enforce explicit little endian for written DICOM files
     dset.file_meta = pydicom.dataset.FileMetaDataset()
@@ -311,3 +322,15 @@ def _dump_dicom_image(image, mrdhead):
     dset.SpacingBetweenSlices = fov_z / nz
 
     return dset
+
+def _parse_custom_dictionary(file_path):
+    custom_tags = {}
+    if file_path is not None:
+        with open(file_path, "r") as f:
+            for line in f:
+                match = re.match(r"\(([\dA-F]{4}),([\dA-F]{4})\)\s+(\w+)\s+(.+)", line.strip())
+                if match:
+                    group, element, vr, name = match.groups()
+                    tag = (int(group, 16), int(element, 16))
+                    custom_tags[tag] = (vr, name)
+    return custom_tags
