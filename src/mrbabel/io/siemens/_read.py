@@ -13,7 +13,7 @@ import mapvbvd
 from ...data import sort_kspace
 from ..._file_search import get_paths
 
-from ..converters._siemens2mrd import read_siemens_header
+from ..converters._siemens2mrd import read_siemens_header, read_siemens_acquisitions
 
 
 def read_siemens(
@@ -49,15 +49,16 @@ def read_siemens(
             f"Found multiple ({len(path)}) dat files - picking the first", UserWarning
         )
     path = path[0]
-    
+
     # reading
     twixObj = mapvbvd.mapVBVD(path, quiet=True)
     if isinstance(twixObj, list):
         twixObj = twixObj[-1]
-    head = read_siemens_header(twixObj.hdr)
-
-    return None, head    
+    head, _raw_head = read_siemens_header(twixObj.hdr)
+    acquisitions = read_siemens_acquisitions(twixObj, twixObj.hdr, twixObj.image)
     
+    if sort:
+        recon_buffers = sort_kspace(acquisitions, head)
+        return recon_buffers, head
     
-    
-    
+    return acquisitions, head

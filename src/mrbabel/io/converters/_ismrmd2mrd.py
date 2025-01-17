@@ -60,7 +60,7 @@ def read_ismrmrd_header(
 def read_ismrmrd_acquisitions(
     acquisitions: list[ismrmrd.Acquisition],
 ) -> list[mrd.Acquisition]:
-    """Create a lis tof MRD Acquisitions from a list of ISMRMRD Acquisitions."""
+    """Create a list of MRD Acquisitions from a list of ISMRMRD Acquisitions."""
     return [read_ismrmrd_acquisition(acq) for acq in acquisitions]
 
 
@@ -723,7 +723,6 @@ def convert_encoding_counters(e):
     encoding_counters.repetition = e.repetition
     encoding_counters.set = e.set
     encoding_counters.segment = e.segment
-
     if hasattr(e, "user") and e.user:
         encoding_counters.user.extend(e.user)
 

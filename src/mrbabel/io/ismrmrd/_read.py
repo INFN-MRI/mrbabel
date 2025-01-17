@@ -45,7 +45,8 @@ def read_ismrmrd(
         raise ValueError("ISMRMRD file not found in target directory.")
     if len(path) > 1:
         raise warnings.warn(
-            f"Found multiple ({len(path)}) ISMRMRD files - picking the first", UserWarning
+            f"Found multiple ({len(path)}) ISMRMRD files - picking the first",
+            UserWarning,
         )
     path = path[0]
 

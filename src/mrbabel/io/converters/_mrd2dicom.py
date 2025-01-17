@@ -33,7 +33,7 @@ def _convert_patient_position(PatientPosition):
 
 
 def dump_dicom_images(
-    images: list[mrd.Image], 
+    images: list[mrd.Image],
     mrdhead: mrd.Header,
     dicomdict_path: str | None = None,
 ) -> list[mrd.Acquisition]:
@@ -45,7 +45,7 @@ def _dump_dicom_image(image, mrdhead, dicomdict_path):
     data = image.data
     head = image.head
     meta = image.meta
-    
+
     # Parse the custom dictionary
     custom_tags = _parse_custom_dictionary(dicomdict_path)
 
@@ -323,12 +323,15 @@ def _dump_dicom_image(image, mrdhead, dicomdict_path):
 
     return dset
 
+
 def _parse_custom_dictionary(file_path):
     custom_tags = {}
     if file_path is not None:
         with open(file_path, "r") as f:
             for line in f:
-                match = re.match(r"\(([\dA-F]{4}),([\dA-F]{4})\)\s+(\w+)\s+(.+)", line.strip())
+                match = re.match(
+                    r"\(([\dA-F]{4}),([\dA-F]{4})\)\s+(\w+)\s+(.+)", line.strip()
+                )
                 if match:
                     group, element, vr, name = match.groups()
                     tag = (int(group, 16), int(element, 16))
