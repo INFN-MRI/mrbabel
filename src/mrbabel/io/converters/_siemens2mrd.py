@@ -5,6 +5,7 @@ __all__ = [
     "read_siemens_acquisitions",
 ]
 
+import copy
 import warnings
 import xml.etree.ElementTree as ET
 
@@ -17,45 +18,48 @@ import numpy as np
 import ismrmrd
 import mrd
 
+from twixtools import quat
+
 from ._ismrmd2mrd import read_ismrmrd_header
 
 
-def read_siemens_header(twixHdr: dict) -> mrd.Header:
+def read_siemens_header(twix_hdr: dict, xml_file: str = None, xsl_file: str = None) -> mrd.Header:
     """Create MRD Header from a Siemens file."""
-    baseLineString = twixHdr["Meas"]["tBaselineString"]
+    baseline_string = twix_hdr["Meas"]["tBaselineString"]
 
     # get version
-    isVB = (
-        "VB17" in baseLineString
-        or "VB15" in baseLineString
-        or "VB13" in baseLineString
-        or "VB11" in baseLineString
+    is_VB = (
+        "VB17" in baseline_string
+        or "VB15" in baseline_string
+        or "VB13" in baseline_string
+        or "VB11" in baseline_string
     )
-    isNX = "NVXA" in baseLineString or "syngo MR XA" in baseLineString
+    is_NX = "NVXA" in baseline_string or "syngo MR XA" in baseline_string
 
     # get converters
-    if isVB:
-        xmlfile = pjoin(
-            dirname(__file__), "_siemens_pmaps", "IsmrmrdParameterMap_Siemens_VB17.xml"
-        )
-    else:
-        xmlfile = pjoin(
-            dirname(__file__), "_siemens_pmaps", "IsmrmrdParameterMap_Siemens.xml"
-        )
-    if isNX:
-        xslfile = pjoin(
-            dirname(__file__), "_siemens_pmaps", "IsmrmrdParameterMap_Siemens_NX.xsl"
-        )
-    else:
-        xslfile = pjoin(
-            dirname(__file__), "_siemens_pmaps", "IsmrmrdParameterMap_Siemens.xsl"
-        )
+    if xml_file is None:
+        if is_VB:
+            xml_file = pjoin(
+                dirname(__file__), "_siemens_pmaps", "IsmrmrdParameterMap_Siemens_VB17.xml"
+            )
+        else:
+            xml_file = pjoin(
+                dirname(__file__), "_siemens_pmaps", "IsmrmrdParameterMap_Siemens.xml"
+            )
+    if xsl_file is None:
+        if is_NX:
+            xsl_file = pjoin(
+                dirname(__file__), "_siemens_pmaps", "IsmrmrdParameterMap_Siemens_NX.xsl"
+            )
+        else:
+            xsl_file = pjoin(
+                dirname(__file__), "_siemens_pmaps", "IsmrmrdParameterMap_Siemens.xsl"
+            )
 
     # convert
-    raw_head = _parse_hdr(twixHdr, xmlfile)
-
-    raw_xml = _head2xml(raw_head, xmlfile)
-    ismrmrd_xml = _apply_xsl_transform(raw_xml, xslfile)
+    twix_xml = get_xml_from_siemens(twix_hdr, xml_file)
+    ismrmrd_xml = convert_siemens_xml_to_ismrmrd_xml(twix_xml, xsl_file)
+    
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         ismrmrd_head = ismrmrd.xsd.CreateFromDocument(ismrmrd_xml)
@@ -100,74 +104,127 @@ def read_siemens_header(twixHdr: dict) -> mrd.Header:
         if any(invalid_pos):
             ismrmrd_head.measurementInformation.relativeTablePosition = None
 
-    return read_ismrmrd_header(ismrmrd_head), raw_head
+    return read_ismrmrd_header(ismrmrd_head)
 
 
-def read_siemens_acquisitions(twixObj, twixHdr, twixAcquisitions, enc_ref=0) -> list[mrd.Acquisition]:
-    """Create a list of MRD Acquisitions from a list of ISMRMRD Acquisitions."""
-    twixAcquisitions.removeOS = False
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        twixData = np.ascontiguousarray(twixAcquisitions.unsorted().T)
-    nacquisitions = twixData.shape[0]
+def read_siemens_acquisitions(
+    twix_hdr, twix_acquisitions, enc_ref=0
+) -> list[mrd.Acquisition]:
+    """Create a list of MRD Acquisitions from a list of Siemens Acquisitions."""
+    nacquisitions = len(twix_acquisitions)
     return [
-        read_siemens_acquisition(twixHdr, twixAcquisitions, twixData, n, enc_ref)
+        read_siemens_acquisition(twix_acquisitions[n], twix_hdr, enc_ref)
         for n in range(nacquisitions)
     ]
 
 
-def read_siemens_acquisition(twixHdr, twixAcquisitions, twixData, n, enc_ref) -> mrd.Acquisition:
-    """Create MRD Acquisition from a ISMRMRD Acquisition."""
+def read_siemens_acquisition(twix_acquisition, twix_hdr, enc_ref) -> mrd.Acquisition:
+    """Create MRD Acquisition from a Siemens Acquisition."""
     acquisition = mrd.Acquisition()
 
     # Fill in the header fields
-    # acquisition.head.flags = acq.flags
+    defs = mrd.AcquisitionFlags
+    if twix_acquisition.mdh.EvalInfoMask & (1 << 25):
+        acquisition.flags = defs.IS_NOISE_MEASUREMENT
+    if twix_acquisition.mdh.EvalInfoMask & (1 << 28):
+        acquisition.flags = defs.FIRST_IN_SLICE
+    if twix_acquisition.mdh.EvalInfoMask & (1 << 29):
+        acquisition.flags = defs.LAST_IN_SLICE
+    if twix_acquisition.mdh.EvalInfoMask & (1 << 11):
+        acquisition.flags = defs.LAST_IN_REPETITION
+
+    # if a line is both image and ref, then do not set the ref flag
+    if twix_acquisition.mdh.EvalInfoMask & (1 << 23):
+        acquisition.flags = defs.IS_PARALLEL_CALIBRATION_AND_IMAGING
+    else:
+        if twix_acquisition.mdh.EvalInfoMask & (1 << 22):
+            acquisition.flags = defs.IS_PARALLEL_CALIBRATION
+
+    if twix_acquisition.mdh.EvalInfoMask & (1 << 24):
+        acquisition.flags = defs.IS_REVERSE
+    if twix_acquisition.mdh.EvalInfoMask & (1 << 11):
+        acquisition.flags = defs.LAST_IN_MEASUREMENT
+    if twix_acquisition.mdh.EvalInfoMask & (1 << 21):
+        acquisition.flags = defs.IS_PHASECORR_DATA
+    if twix_acquisition.mdh.EvalInfoMask & (1 << 1):
+        acquisition.flags = defs.IS_NAVIGATION_DATA
+    if twix_acquisition.mdh.EvalInfoMask & (1 << 1):
+        acquisition.flags = defs.IS_RTFEEDBACK_DATA
+    if twix_acquisition.mdh.EvalInfoMask & (1 << 2):
+        acquisition.flags = defs.IS_HPFEEDBACK_DATA
+    if twix_acquisition.mdh.EvalInfoMask & (1 << 51):
+        acquisition.flags = defs.IS_DUMMYSCAN_DATA
+    if twix_acquisition.mdh.EvalInfoMask & (1 << 10):
+        acquisition.flags = defs.IS_SURFACECOILCORRECTIONSCAN_DATA
+    if twix_acquisition.mdh.EvalInfoMask & (1 << 5):
+        acquisition.flags = defs.IS_DUMMYSCAN_DATA
+
+    if twix_acquisition.mdh.EvalInfoMask & (1 << 46):
+        acquisition.flags = defs.LAST_IN_MEASUREMENT
 
     encoding_counter = mrd.EncodingCounters()
-    encoding_counter.kspace_encode_step_1 = int(twixAcquisitions.Lin[n])
-    encoding_counter.kspace_encode_step_2 = int(twixAcquisitions.Par[n])
-    encoding_counter.average = int(twixAcquisitions.Ave[n])
-    encoding_counter.slice = int(twixAcquisitions.Sli[n])
-    encoding_counter.contrast = int(twixAcquisitions.Eco[n])
-    encoding_counter.phase = int(twixAcquisitions.Phs[n])
-    encoding_counter.repetition = int(twixAcquisitions.Rep[n])
-    encoding_counter.set = int(twixAcquisitions.Set[n])
-    encoding_counter.segment = int(twixAcquisitions.Seg[n])
+    encoding_counter.kspace_encode_step_1 = twix_acquisition.mdh.Counter.Lin
+    encoding_counter.kspace_encode_step_2 = twix_acquisition.mdh.Counter.Par
+    encoding_counter.average = twix_acquisition.mdh.Counter.Ave
+    encoding_counter.slice = twix_acquisition.mdh.Counter.Sli
+    encoding_counter.contrast = twix_acquisition.mdh.Counter.Eco
+    encoding_counter.phase = twix_acquisition.mdh.Counter.Phs
+    encoding_counter.repetition = twix_acquisition.mdh.Counter.Rep
+    encoding_counter.set = twix_acquisition.mdh.Counter.Set
+    encoding_counter.segment = twix_acquisition.mdh.Counter.Seg
     encoding_counter.user.extend(
         [
-            int(twixAcquisitions.Ida[n]),
-            int(twixAcquisitions.Idb[n]),
-            int(twixAcquisitions.Idc[n]),
-            int(twixAcquisitions.Idd[n]),
-            int(twixAcquisitions.Ide[n]),
+            twix_acquisition.mdh.Counter.Ida,
+            twix_acquisition.mdh.Counter.Idb,
+            twix_acquisition.mdh.Counter.Idc,
+            twix_acquisition.mdh.Counter.Idd,
+            twix_acquisition.mdh.Counter.Ide,
         ]
     )
 
     acquisition.head.idx = encoding_counter
-    acquisition.head.measurement_uid = int(twixHdr.Meas.MeasUID)
-    acquisition.head.scan_counter = int(twixAcquisitions.scancounter[n])
-    acquisition.head.acquisition_time_stamp = float(twixAcquisitions.timestamp[n])
-    acquisition.head.physiology_time_stamp = float(twixAcquisitions.pmutime[n])
-    for n in range(twixAcquisitions.NCha):
+    acquisition.head.measurement_uid = twix_acquisition.mdh.MeasUID
+    acquisition.head.scan_counter = twix_acquisition.mdh.ScanCounter
+    acquisition.head.acquisition_time_stamp = twix_acquisition.mdh.TimeStamp
+    acquisition.head.physiology_time_stamp = twix_acquisition.mdh.PMUTimeStamp
+    for n in range(twix_acquisition.mdh.UsedChannels):
         acquisition.head.channel_order.append(n)
 
-    acquisition.head.discard_pre = int(twixAcquisitions.cutOff[n][0])
-    acquisition.head.discard_post = int(twixAcquisitions.cutOff[n][1])
-    acquisition.head.center_sample = int(twixAcquisitions.centerCol[n])
+    acquisition.head.discard_pre = int(twix_acquisition.mdh.CutOff.Pre)
+    acquisition.head.discard_post = int(twix_acquisition.mdh.CutOff.Post)
+    acquisition.head.center_sample = int(twix_acquisition.mdh.CenterCol)
     acquisition.head.encoding_space_ref = enc_ref
-    acquisition.head.sample_time_us = twixHdr.MeasYaps[('sRXSPEC','alDwellTime', '0')] / 1000.0
+    acquisition.head.sample_time_us = (
+        twix_hdr["MeasYaps"]["sRXSPEC"]["alDwellTime"][0] / 1000.0
+    )
 
-    # acquisition.head.position = list(acq.position)
-    # acquisition.head.read_dir = list(acq.read_dir)
-    # acquisition.head.phase_dir = list(acq.phase_dir)
-    # acquisition.head.slice_dir = list(acq.slice_dir)
-    # acquisition.head.patient_table_position = list(acq.patient_table_position)
+    position = [
+        twix_acquisition.mdh.SliceData.SlicePos.Sag,
+        twix_acquisition.mdh.SliceData.SlicePos.Cor,
+        twix_acquisition.mdh.SliceData.SlicePos.Tra,
+        ]
+    acquisition.head.position = position
+    
+    quaternion = [
+        twix_acquisition.mdh.SliceData.Quaternion[1],
+        twix_acquisition.mdh.SliceData.Quaternion[2],
+        twix_acquisition.mdh.SliceData.Quaternion[3],
+        twix_acquisition.mdh.SliceData.Quaternion[0],        
+        ]
+    read_dir, phase_dir, slice_dir = quat.quaternion_to_directions(quaternion)
+    acquisition.head.read_dir = read_dir
+    acquisition.head.phase_dir = phase_dir
+    acquisition.head.slice_dir = slice_dir
+    
+    patient_table_position = [twix_acquisition.mdh.PTABPosX, twix_acquisition.mdh.PTABPosY, twix_acquisition.mdh.PTABPosZ]
+    acquisition.head.patient_table_position = patient_table_position
 
-    # acquisition.head.user_int.extend(list(acq.user_int))
-    # acquisition.head.user_float.extend(list(acq.user_float))
+    acquisition.head.user_int.extend(list(twix_acquisition.mdh.IceProgramPara[:7]))
+    acquisition.head.user_int.append(twix_acquisition.mdh.TimeSinceLastRF)
+    acquisition.head.user_float.extend(list(twix_acquisition.mdh.IceProgramPara[8:16]))
 
     # # Resize the data structure (for example, using numpy arrays or lists)
-    acquisition.data = twixData[n]
+    acquisition.data = twix_acquisition.data
 
     # # If trajectory dimensions are present, resize and fill the trajectory data
     # if acq.trajectory_dimensions > 0:
@@ -177,23 +234,81 @@ def read_siemens_acquisition(twixHdr, twixAcquisitions, twixData, n, enc_ref) ->
 
 
 # %% local utils
-def _merge_and_convert_dicts(dicts):
+def get_xml_from_siemens(twix_hdr, xml_file):
+    raw_head = _parse_hdr(copy.deepcopy(twix_hdr), xml_file)
+    return _hdr2xml(raw_head, xml_file)
+
+
+def convert_siemens_xml_to_ismrmrd_xml(twix_xml, xsl_file):
+    """Apply an XSL transformation to an input XML string using an XSLT file."""    
+    # Parse the input XML and XSLT
+    xml_tree = etree.fromstring(twix_xml)
+    
+    # Preprocess: Expand all lists in the XML tree
+    xml_tree = _expand_all_as_sequence(xml_tree)
+
+    # Parse XSLT
+    xsl_tree = etree.parse(xsl_file)
+
+    # Create an XSLT transformer
+    transform = etree.XSLT(xsl_tree)
+
+    # Apply the transformation
+    result_tree = transform(xml_tree)
+
+    return str(result_tree)
+
+
+def _flatten_dict(d, parent_key="", sep="."):
+    items = []
+    for k, v in d.items():
+        new_key = f"{parent_key}{sep}{k}" if parent_key else k
+        if isinstance(v, dict):
+            # Recurse into dictionaries
+            items.extend(_flatten_dict(v, new_key, sep=sep).items())
+        elif isinstance(v, (list, tuple)):
+            # Handle lists and tuples
+            for idx, item in enumerate(v):
+                indexed_key = f"{new_key}{sep}{idx}"
+                if isinstance(item, dict):
+                    # Recurse into dictionaries inside lists/tuples
+                    items.extend(_flatten_dict(item, indexed_key, sep=sep).items())
+                else:
+                    items.append((indexed_key, item))
+        else:
+            # Base case: Add the key-value pair
+            items.append((new_key, v))
+    return dict(items)
+
+
+def _merge_dicts(dicts):
     merged_dict = {}
 
     for d in dicts:
         for key, value in d.items():
-            # Convert tuple keys into dotted string
-            if isinstance(key, tuple):
-                key = ".".join(key)
-            # Merge into the final dictionary
             merged_dict[key] = value
 
     return merged_dict
 
 
-def _parse_hdr(twixHdr, xmlfile):
+def _parse_hdr(twix_hdr, xmlfile):
+    twix_hdr.pop("Config_raw", None)
+    twix_hdr.pop("Dicom_raw", None)
+    twix_hdr.pop("Meas_raw", None)
+    twix_hdr.pop("MeasYaps_raw", None)
+    twix_hdr.pop("Phoenix_raw", None)
+    twix_hdr.pop("Spice_raw", None)
+
     mappings = _parse_xml(xmlfile)
-    _raw_hdr = _merge_and_convert_dicts(list(twixHdr.values()))
+    _raw_hdr = {
+        "Config": twix_hdr["Config"],
+        "Dicom": twix_hdr["Dicom"],
+        "Meas": twix_hdr["Meas"],
+        "MeasYaps": _flatten_dict(twix_hdr["MeasYaps"]),
+        "Phoenix": _flatten_dict(twix_hdr["Phoenix"]),
+        "Spice": twix_hdr["Spice"],
+    }
+    _raw_hdr = _merge_dicts(list(_raw_hdr.values()))
 
     fields = list(mappings.keys())
     hdr = {}
@@ -205,21 +320,33 @@ def _parse_hdr(twixHdr, xmlfile):
             value = []
 
         hdr[field] = value
-
+        
     # manually fix Dwell Time
     hdr["MEAS.sRXSPEC.alDwellTime"] = _raw_hdr["sRXSPEC.alDwellTime.0"]
+    recon_dependencies = twix_hdr["Meas"]["ReconMeasDependencies"].split(" ")
+    try:
+        hdr["YAPS.ReconMeasDependencies.0"] = int(recon_dependencies[0])
+    except Exception:
+        pass
+    try:
+        hdr["YAPS.ReconMeasDependencies.1"] = int(recon_dependencies[1])
+    except Exception:
+        pass
+    try:
+        hdr["YAPS.ReconMeasDependencies.2"] = int(recon_dependencies[2])
+    except Exception:
+        pass
+    # # manually fix IRIS and Header
+    hdr["IRIS.DERIVED.phaseOversampling"] = twix_hdr["Meas"]["phaseOversampling"]
+    hdr["IRIS.DERIVED.ImageColumns"] = twix_hdr["Meas"]["ImageColumns"]
+    hdr["IRIS.DERIVED.ImageLines"] = twix_hdr["Meas"]["ImageLines"]
+    hdr["IRIS.RECOMPOSE.PatientID"] = twix_hdr["Meas"]["PatientID"]
+    hdr["IRIS.RECOMPOSE.PatientLOID"] = twix_hdr["Meas"]["PatientLOID"]
+    hdr["IRIS.RECOMPOSE.PatientBirthDay"] = twix_hdr["Meas"]["PatientBirthDay"]
+    hdr["IRIS.RECOMPOSE.StudyLOID"] = twix_hdr["Meas"]["StudyLOID"]
+    hdr["HEADER.MeasUID"] = twix_hdr["Meas"]["MeasUID"]
 
-    # manually fix IRIS and Header
-    hdr["IRIS.DERIVED.phaseOversampling"] = twixHdr.Meas.phaseOversampling
-    hdr["IRIS.DERIVED.ImageColumns"] = twixHdr.Meas.ImageColumns
-    hdr["IRIS.DERIVED.ImageLines"] = twixHdr.Meas.ImageLines
-    hdr["IRIS.RECOMPOSE.PatientID"] = twixHdr.Meas.PatientID
-    hdr["IRIS.RECOMPOSE.PatientLOID"] = twixHdr.Meas.PatientLOID
-    hdr["IRIS.RECOMPOSE.PatientBirthDay"] = twixHdr.Meas.PatientBirthDay
-    hdr["IRIS.RECOMPOSE.StudyLOID"] = twixHdr.Meas.StudyLOID
-    hdr["HEADER.MeasUID"] = twixHdr.Meas.MeasUID
-
-    # clean-up
+    # # clean-up
     if "YAPS.iMaxNoOfRxChannels" in hdr:
         hdr["YAPS.iMaxNoOfRxChannels"] = int(hdr["YAPS.iMaxNoOfRxChannels"])
     if "DICOM.lFrequency" in hdr:
@@ -252,11 +379,26 @@ def _parse_hdr(twixHdr, xmlfile):
         hdr["MEAS.sSliceArray.asSlice.0.dThickness"] = hdr[
             "MEAS.sSliceArray.asSlice.0.dThickness"
         ]
-
+        
+    # clean contrasts
+    ncontrasts = hdr["MEAS.lContrasts"]
+    if "MEAS.alTR" in hdr:
+        for n in range(ncontrasts, len(hdr["MEAS.alTR"])):
+            hdr["MEAS.alTR"][n] = 0
+    if "MEAS.alTE" in hdr:
+        for n in range(ncontrasts, len(hdr["MEAS.alTE"])):
+            hdr["MEAS.alTE"][n] = 0
+    if "MEAS.alTI" in hdr:
+        for n in range(ncontrasts, len(hdr["MEAS.alTI"])):
+            hdr["MEAS.alTI"][n] = 0
+    if "MEAS.adFlipAngleDegree" in hdr:
+        for n in range(ncontrasts, len(hdr["MEAS.adFlipAngleDegree"])):
+            hdr["MEAS.adFlipAngleDegree"] = 0
+        
     return hdr
 
 
-def _head2xml(raw_head, xmlfile):
+def _hdr2xml(raw_head, xmlfile):
     mappings = _parse_xml(xmlfile)
     output = _dict_to_xml("siemens", _transform_dict(raw_head, mappings)["siemens"])
     return ET.tostring(output, encoding="utf-8", method="xml")
@@ -273,7 +415,6 @@ def _parse_xml(xml_file):
         destination = param.find("d").text.strip()
         mappings[source] = destination
 
-    # simpler
     return mappings
 
 
@@ -288,6 +429,15 @@ def _transform_dict(original_dict, mappings):
             for key in keys[:-1]:
                 temp = temp.setdefault(key, {})
             temp[keys[-1]] = original_dict[src_key]
+            
+    for n in range(64):
+        new_dict["siemens"]["MEAS"]["asCoilSelectMeas"]["ID"]["tCoilID"].append(original_dict[f"MEAS.sCoilSelectMeas.aRxCoilSelectData.0.asList.{n}.sCoilElementID.tCoilID"])
+        new_dict["siemens"]["MEAS"]["asCoilSelectMeas"]["Coil"]["lCoilCopy"].append(original_dict[f"MEAS.sCoilSelectMeas.aRxCoilSelectData.0.asList.{n}.sCoilElementID.lCoilCopy"])
+        new_dict["siemens"]["MEAS"]["asCoilSelectMeas"]["Elem"]["tElement"].append(original_dict[f"MEAS.sCoilSelectMeas.aRxCoilSelectData.0.asList.{n}.sCoilElementID.tElement"])
+        new_dict["siemens"]["MEAS"]["asCoilSelectMeas"]["Select"]["lElementSelected"].append(original_dict[f"MEAS.sCoilSelectMeas.aRxCoilSelectData.0.asList.{n}.lElementSelected"])
+        new_dict["siemens"]["MEAS"]["asCoilSelectMeas"]["Rx"]["lRxChannelConnected"].append(original_dict[f"MEAS.sCoilSelectMeas.aRxCoilSelectData.0.asList.{n}.lRxChannelConnected"])
+        new_dict["siemens"]["MEAS"]["asCoilSelectMeas"]["ADC"]["lADCChannelConnected"].append(original_dict[f"MEAS.sCoilSelectMeas.aRxCoilSelectData.0.asList.{n}.lADCChannelConnected"])
+        
     return new_dict
 
 
@@ -306,306 +456,28 @@ def _dict_to_xml(tag, d):
     return elem
 
 
-def _apply_xsl_transform(input_xml, xsl_file):
-    """Apply an XSL transformation to an input XML string using an XSLT file."""
-    # Parse the input XML and XSLT
-    xml_tree = etree.fromstring(input_xml)
+def _expand_all_as_sequence(tree):
+    root = tree  # In lxml, `tree` is the root element itself
 
-    # Preprocess: Expand all lists in the XML tree
-    _expand_all_lists(xml_tree)
-
-    # Parse XSLT
-    xsl_tree = etree.parse(xsl_file)
-
-    # Create an XSLT transformer
-    transform = etree.XSLT(xsl_tree)
-
-    # Apply the transformation
-    result_tree = transform(xml_tree)
-
-    return str(result_tree)
-
-
-def _expand_all_lists(xml_tree):
-    """
-    Expand all elements in the XML tree that represent lists into multiple elements.
-    Specifically, converts space-separated string values to lists of elements.
-    """
-    for element in xml_tree.xpath("//*"):  # Iterate through all elements
-        if element.text:
-            # Check if the element text is a space-delimited string
-            split_text = element.text.strip().split()
-            if len(split_text) > 1:  # It's a space-separated string (list)
-                parent = element.getparent()
-                tag = element.tag
-
-                # Remove the original element from the parent
-                parent.remove(element)
-
-                # Create new elements for each list item and append them to the parent
-                for value in split_text:
-                    new_element = etree.Element(tag)
-                    new_element.text = value  # Set the value for each new element
-                    parent.append(new_element)
-
-
-# %% 
-# Copied from https://github.com/pehses/twixtools
-# helper functions to convert quaternions to read/phase/slice normal vectors
-# and vice vectors
-# direct translation from ismrmrd.c from the ismrmrd project
-
-def quaternion_to_directions(quat):
-    a, b, c, d = quat
-
-    read_dir = 3 * [None]
-    phase_dir = 3 * [None]
-    slice_dir = 3 * [None]
-
-    read_dir[0] = 1. - 2. * (b * b + c * c)
-    phase_dir[0] = 2. * (a * b - c * d)
-    slice_dir[0] = 2. * (a * c + b * d)
-
-    read_dir[1] = 2. * (a * b + c * d)
-    phase_dir[1] = 1. - 2. * (a * a + c * c)
-    slice_dir[1] = 2. * (b * c - a * d)
-
-    read_dir[2] = 2. * (a * c - b * d)
-    phase_dir[2] = 2. * (b * c + a * d)
-    slice_dir[2] = 1. - 2. * (a * a + b * b)
-
-    return read_dir, phase_dir, slice_dir
-
-
-def directions_to_quaternion(read_dir, phase_dir, slice_dir):
-
-    r11, r21, r31 = read_dir
-    r12, r22, r32 = phase_dir
-    r13, r23, r33 = slice_dir
-
-    a, b, c, d, s = 1, 0, 0, 0, 0
-    trace = 0
-
-    # verify the sign of the rotation
-    if __sign_of_directions(read_dir, phase_dir, slice_dir) < 0:
-        # flip 3rd column
-        r13, r23, r33 = -r13, -r23, -r33
-
-    # Compute quaternion parameters
-    # http://www.cs.princeton.edu/~gewang/projects/darth/stuff/quat_faq.html#Q55
-    trace = 1.0 + r11 + r22 + r33
-    if trace > 0.00001:  # simplest case
-        s = np.sqrt(trace) * 2
-        a = (r32 - r23) / s
-        b = (r13 - r31) / s
-        c = (r21 - r12) / s
-        d = 0.25 * s
-    else:
-        # trickier case...
-        # determine which major diagonal element has
-        # the greatest value...
-        xd = 1.0 + r11 - (r22 + r33)  # 4**b**b
-        yd = 1.0 + r22 - (r11 + r33)  # 4**c**c
-        zd = 1.0 + r33 - (r11 + r22)  # 4**d**d
-        # if r11 is the greatest
-        if xd > 1.0:
-            s = 2.0 * np.sqrt(xd)
-            a = 0.25 * s
-            b = (r21 + r12) / s
-            c = (r31 + r13) / s
-            d = (r32 - r23) / s
-        # else if r22 is the greatest
-        elif yd > 1.0:
-            s = 2.0 * np.sqrt(yd)
-            a = (r21 + r12) / s
-            b = 0.25 * s
-            c = (r32 + r23) / s
-            d = (r13 - r31) / s
-        # else, r33 must be the greatest
-        else:
-            s = 2.0 * np.sqrt(zd)
-            a = (r13 + r31) / s
-            b = (r23 + r32) / s
-            c = 0.25 * s
-            d = (r21 - r12) / s
-
-        if a < 0.0:
-            a, b, c, d = -a, -b, -c, -d
-
-    return [a, b, c, d]
-
-
-def __sign_of_directions(read_dir, phase_dir, slice_dir):
-    r11, r21, r31 = read_dir
-    r12, r22, r32 = phase_dir
-    r13, r23, r33 = slice_dir
-
-    # Determinant should be 1 or -1
-    deti = (r11 * r22 * r33) + (r12 * r23 * r31) + (r21 * r32 * r13) -\
-           (r13 * r22 * r31) - (r12 * r21 * r33) - (r11 * r23 * r32)
-
-    if deti < 0:
-        return -1
-    else:
-        return 1
+    def expand_element(parent, element):
+        # Check if the element's text is a vector-like value
+        if element.text and element.text.startswith('[') and element.text.endswith(']'):
+            # Parse the vector values
+            values = element.text.strip('[]').split(',')
+            values = [v.strip() for v in values]
+            
+            # Expand the element into multiple repeated elements
+            for value in values:
+                new_elem = etree.Element(element.tag)
+                new_elem.text = value
+                parent.append(new_elem)
+            
+            # Remove the original vector-valued element
+            parent.remove(element)
     
-internal_os = 2
-pcs_directions = ["dSag", "dCor", "dTra"]
-
-# p. 418 - pcs to dcs
-pcs_transformations = {
-    "HFS": [[1, 0, 0], [0, -1, 0], [0, 0, -1]],
-    "HFP": [[-1, 0, 0], [0, 1, 0], [0, 0, -1]],
-    "FFS": [[-1, 0, 0], [0, -1, 0], [0, 0, 1]],
-}
-
-
-class Geometry:
-    """Get geometric information from twix dict
-
-    During initialization, information about slice geometry is copied from the supplied twix dict.
-    Methods for conversion between the different coordinate systems
-    Patient Coordinate System (PCS; Sag/Cor/Tra), Device Coordinate System (XYZ) and Gradient Coordinate System
-    (GCS or PRS; Phase, Readout, Slice) are implemented (so far only rotation, i.e. won't work for offcenter measurementes).
-
-    Examples
-    ----------
-    ```
-    import twixtools
-    twix = twixtools.read_twix('meas.dat', parse_geometry=True, parse_data=False)
-    x = [1,1,1]
-    y = twix[-1]['geometry'].rps_to_xyz() @ x
-    ```
-
-    Based on work from Christian Mirkes and Ali Aghaeifar.
-    """
-
-    def __init__(self, twix):
-        self.from_twix(twix)
-
-    def __str__(self):
-        return ("Geometry:\n"
-                f"  inplane_rot: {self.inplane_rot}\n"
-                f"  normal: {self.normal}\n"
-                f"  offset: {self.offset}\n"
-                f"  patient_position: {self.patient_position}\n"
-                f"  rotmatrix: {self.rotmatrix}\n"
-                f"  voxelsize: {self.voxelsize}")
-
-    def from_twix(self, twix):
-        if twix["hdr"]["MeasYaps"][("sKSpace", "ucDimension")] == 2:
-            self.dims = 2
-        elif twix["hdr"]["MeasYaps"][("sKSpace", "ucDimension")] == 4:
-            self.dims = 3
-        else:
-            self.dims = None
-
-        if len(twix["hdr"]["MeasYaps"][("sKSpace", "asSlice")]) > 1:
-            print("WARNING: Geometry calculations are valid only for the first slice in this multi-slice acquisition.")
-
-        self.fov = [
-            twix["hdr"]["MeasYaps"][("sKSpace", "asSlice", "0")]["dReadoutFOV"]
-            * internal_os,
-            twix["hdr"]["MeasYaps"][("sKSpace", "asSlice", "0")]["dPhaseFOV"],
-            twix["hdr"]["MeasYaps"][("sKSpace", "asSlice", "0")]["dThickness"],
-        ]
-
-        self.resolution = [
-            twix["hdr"]["MeasYaps"][("sKSpace", "lBaseResolution")] * internal_os,
-            twix["hdr"]["MeasYaps"][("sKSpace", "lPhaseEncodingLines")],
-            twix["hdr"]["MeasYaps"][("sKSpace", "lPartitions")] if self.dims == 3 else 1,
-        ]
-
-        self.voxelsize = list(np.array(self.fov) / np.array(self.resolution))
-
-        self.normal = [0, 0, 0]
-        if "sNormal" in twix["hdr"][("sKSpace", "asSlice", "0")]:
-            for i, d in enumerate(pcs_directions):
-                self.normal[i] = twix["hdr"]["MeasYaps"][("sKSpace", "asSlice", "0")][
-                    "sNormal"
-                ].get(d, self.normal[i])
-
-        self.offset = [0, 0, 0]
-        if "sPosition" in twix["hdr"]["MeasYaps"][("sKSpace", "asSlice", "0")]:
-            for i, d in enumerate(pcs_directions):
-                self.offset[i] = twix["hdr"]["MeasYaps"][("sKSpace", "asSlice", "0")][
-                    "sPosition"
-                ].get(d, self.offset[i])
-
-        self.inplane_rot = twix["hdr"]["MeasYaps"][("sKSpace", "asSlice", "0")].get(
-            "dInPlaneRot", 0
-        )
-
-        if "tPatientPosition" in twix["hdr"]["Meas"]:
-            self.patient_position = twix["hdr"]["Meas"].get("tPatientPosition")
-        elif "sPatPosition" in twix["hdr"]["Meas"]:
-            self.patient_position = twix["hdr"]["Meas"].get("sPatPosition")
-        else:
-            self.patient_position = None
-
-        self.rotmatrix = self.rps_to_xyz().tolist()
-
-    def get_plane_orientation(self):
-        # sanity check if normal vector is unit vector
-        norm = np.linalg.norm(self.normal)
-        if not abs(1 - norm) < 0.001:
-            raise RuntimeError(f"Normal vector is not normal: |x| = {norm}")
-
-        # find main direction of normal vector for first part of rot matrix
-        maindir = np.argmax(np.abs(self.normal))
-        if maindir == 0:
-            init_mat = [[0, 0, 1], [0, 1, 0], [-1, 0, 0]]  # @ mat // inplane mat
-        elif maindir == 1:
-            init_mat = [[0, 1, 0], [0, 0, 1], [1, 0, 0]]
-        else:
-            init_mat = np.eye(3)
-
-        # initialize normal vector direction to which to compute the second part of rotation matrix
-        init_normal = np.zeros(3)
-        init_normal[maindir] = 1
-
-        # calculate cross product and sine, cosine
-        v = np.cross(init_normal, self.normal)
-        s = np.linalg.norm(v)
-        c = np.dot(init_normal, self.normal)
-
-        if s <= 0.00001:
-            # we have cosine 1 or -1, two vectors are (anti-) parallel
-            mat = np.matmul(np.eye(3) * c, init_mat)
-        else:
-            # calculate cross product matrix
-            v_x = np.cross(np.eye(3), v)
-            # calculate rotation matrix, division should be possible from excluding c = -1 above
-            mat = np.eye(3) + v_x + np.divide(np.matmul(v_x, v_x), 1 + c)
-            # calculate full rotation matrix
-            mat = np.matmul(mat, init_mat)
-
-        return mat
-
-    def get_inplane_rotation(self):
-        mat = [
-            [-np.sin(self.inplane_rot), np.cos(self.inplane_rot), 0],
-            [-np.cos(self.inplane_rot), -np.sin(self.inplane_rot), 0],
-            [0, 0, 1],
-        ]
-        return np.array(mat)
-
-    def prs_to_pcs(self):
-        mat = self.get_inplane_rotation()
-        mat = self.get_plane_orientation() @ mat
-        return mat
-
-    def pcs_to_xyz(self):
-        if self.patient_position in pcs_transformations:
-            return np.array(pcs_transformations[self.patient_position])
-        else:
-            raise RuntimeError(f"Unknown patient position: {self.patient_position}")
-
-    def prs_to_xyz(self):
-        return self.pcs_to_xyz() @ self.prs_to_pcs()
-
-    def rps_to_xyz(self):
-        return self.prs_to_xyz() @ self.rps_to_prs()
-
-    def rps_to_prs(self):
-        return np.array([[0, 1, 0], [1, 0, 0], [0, 0, -1]])
+    # Traverse and process the tree
+    for parent in root.xpath('.//*'):  # XPath selects all elements in the tree
+        for child in list(parent):
+            expand_element(parent, child)
+    
+    return tree

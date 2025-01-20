@@ -42,9 +42,10 @@ classifiers = [  # Optional
 dependencies = [
 "ismrmrd",
 "mrd-python",
-"pymapvbvd",
+"gt-twixtool",
 "pyvoxel",
 "nii2dcm",
+"lxml
 ]
 
 [project.optional-dependencies] # Optional

@@ -34,7 +34,7 @@ def read_ismrmrd(
     image : mrd.ReconBuffer | list[mrd.ReconBuffer] | list[mrd.Acquisition]
         MRD ReconBuffer(s)  or list of MRD Acquisitions parsed from MRD file.
     head : mrd.Head
-        MRD Header parsed from NIfTI files.
+        MRD Header parsed from ISMRMRD files.
 
     """
     if isinstance(path, str) and path.endswith(".h5"):
