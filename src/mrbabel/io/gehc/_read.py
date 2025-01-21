@@ -1,4 +1,4 @@
-"""Siemens reading routines."""
+"""GE HealthCare reading routines."""
 
 __all__ = ["read_siemens"]
 

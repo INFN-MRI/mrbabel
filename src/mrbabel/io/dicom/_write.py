@@ -24,7 +24,7 @@ def write_dicom(
     head: mrd.Header,
 ):
     """
-    Writes MRD ImageArray to DICOM.
+    Write MRD ImageArray to DICOM.
 
     Parameters
     ----------
