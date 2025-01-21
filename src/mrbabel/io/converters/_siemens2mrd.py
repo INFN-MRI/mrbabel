@@ -23,7 +23,9 @@ from twixtools import quat
 from ._ismrmd2mrd import read_ismrmrd_header
 
 
-def read_siemens_header(twix_hdr: dict, xml_file: str = None, xsl_file: str = None) -> mrd.Header:
+def read_siemens_header(
+    twix_hdr: dict, xml_file: str = None, xsl_file: str = None
+) -> mrd.Header:
     """Create MRD Header from a Siemens file."""
     baseline_string = twix_hdr["Meas"]["tBaselineString"]
 
@@ -40,7 +42,9 @@ def read_siemens_header(twix_hdr: dict, xml_file: str = None, xsl_file: str = No
     if xml_file is None:
         if is_VB:
             xml_file = pjoin(
-                dirname(__file__), "_siemens_pmaps", "IsmrmrdParameterMap_Siemens_VB17.xml"
+                dirname(__file__),
+                "_siemens_pmaps",
+                "IsmrmrdParameterMap_Siemens_VB17.xml",
             )
         else:
             xml_file = pjoin(
@@ -49,7 +53,9 @@ def read_siemens_header(twix_hdr: dict, xml_file: str = None, xsl_file: str = No
     if xsl_file is None:
         if is_NX:
             xsl_file = pjoin(
-                dirname(__file__), "_siemens_pmaps", "IsmrmrdParameterMap_Siemens_NX.xsl"
+                dirname(__file__),
+                "_siemens_pmaps",
+                "IsmrmrdParameterMap_Siemens_NX.xsl",
             )
         else:
             xsl_file = pjoin(
@@ -59,7 +65,7 @@ def read_siemens_header(twix_hdr: dict, xml_file: str = None, xsl_file: str = No
     # convert
     twix_xml = get_xml_from_siemens(twix_hdr, xml_file)
     ismrmrd_xml = convert_siemens_xml_to_ismrmrd_xml(twix_xml, xsl_file)
-    
+
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         ismrmrd_head = ismrmrd.xsd.CreateFromDocument(ismrmrd_xml)
@@ -202,21 +208,25 @@ def read_siemens_acquisition(twix_acquisition, twix_hdr, enc_ref) -> mrd.Acquisi
         twix_acquisition.mdh.SliceData.SlicePos.Sag,
         twix_acquisition.mdh.SliceData.SlicePos.Cor,
         twix_acquisition.mdh.SliceData.SlicePos.Tra,
-        ]
+    ]
     acquisition.head.position = position
-    
+
     quaternion = [
         twix_acquisition.mdh.SliceData.Quaternion[1],
         twix_acquisition.mdh.SliceData.Quaternion[2],
         twix_acquisition.mdh.SliceData.Quaternion[3],
-        twix_acquisition.mdh.SliceData.Quaternion[0],        
-        ]
+        twix_acquisition.mdh.SliceData.Quaternion[0],
+    ]
     read_dir, phase_dir, slice_dir = quat.quaternion_to_directions(quaternion)
     acquisition.head.read_dir = read_dir
     acquisition.head.phase_dir = phase_dir
     acquisition.head.slice_dir = slice_dir
-    
-    patient_table_position = [twix_acquisition.mdh.PTABPosX, twix_acquisition.mdh.PTABPosY, twix_acquisition.mdh.PTABPosZ]
+
+    patient_table_position = [
+        twix_acquisition.mdh.PTABPosX,
+        twix_acquisition.mdh.PTABPosY,
+        twix_acquisition.mdh.PTABPosZ,
+    ]
     acquisition.head.patient_table_position = patient_table_position
 
     acquisition.head.user_int.extend(list(twix_acquisition.mdh.IceProgramPara[:7]))
@@ -240,10 +250,10 @@ def get_xml_from_siemens(twix_hdr, xml_file):
 
 
 def convert_siemens_xml_to_ismrmrd_xml(twix_xml, xsl_file):
-    """Apply an XSL transformation to an input XML string using an XSLT file."""    
+    """Apply an XSL transformation to an input XML string using an XSLT file."""
     # Parse the input XML and XSLT
     xml_tree = etree.fromstring(twix_xml)
-    
+
     # Preprocess: Expand all lists in the XML tree
     xml_tree = _expand_all_as_sequence(xml_tree)
 
@@ -320,7 +330,7 @@ def _parse_hdr(twix_hdr, xmlfile):
             value = []
 
         hdr[field] = value
-        
+
     # manually fix Dwell Time
     hdr["MEAS.sRXSPEC.alDwellTime"] = _raw_hdr["sRXSPEC.alDwellTime.0"]
     recon_dependencies = twix_hdr["Meas"]["ReconMeasDependencies"].split(" ")
@@ -379,7 +389,7 @@ def _parse_hdr(twix_hdr, xmlfile):
         hdr["MEAS.sSliceArray.asSlice.0.dThickness"] = hdr[
             "MEAS.sSliceArray.asSlice.0.dThickness"
         ]
-        
+
     # clean contrasts
     ncontrasts = hdr["MEAS.lContrasts"]
     if "MEAS.alTR" in hdr:
@@ -394,7 +404,7 @@ def _parse_hdr(twix_hdr, xmlfile):
     if "MEAS.adFlipAngleDegree" in hdr:
         for n in range(ncontrasts, len(hdr["MEAS.adFlipAngleDegree"])):
             hdr["MEAS.adFlipAngleDegree"] = 0
-        
+
     return hdr
 
 
@@ -429,15 +439,45 @@ def _transform_dict(original_dict, mappings):
             for key in keys[:-1]:
                 temp = temp.setdefault(key, {})
             temp[keys[-1]] = original_dict[src_key]
-            
+
     for n in range(64):
-        new_dict["siemens"]["MEAS"]["asCoilSelectMeas"]["ID"]["tCoilID"].append(original_dict[f"MEAS.sCoilSelectMeas.aRxCoilSelectData.0.asList.{n}.sCoilElementID.tCoilID"])
-        new_dict["siemens"]["MEAS"]["asCoilSelectMeas"]["Coil"]["lCoilCopy"].append(original_dict[f"MEAS.sCoilSelectMeas.aRxCoilSelectData.0.asList.{n}.sCoilElementID.lCoilCopy"])
-        new_dict["siemens"]["MEAS"]["asCoilSelectMeas"]["Elem"]["tElement"].append(original_dict[f"MEAS.sCoilSelectMeas.aRxCoilSelectData.0.asList.{n}.sCoilElementID.tElement"])
-        new_dict["siemens"]["MEAS"]["asCoilSelectMeas"]["Select"]["lElementSelected"].append(original_dict[f"MEAS.sCoilSelectMeas.aRxCoilSelectData.0.asList.{n}.lElementSelected"])
-        new_dict["siemens"]["MEAS"]["asCoilSelectMeas"]["Rx"]["lRxChannelConnected"].append(original_dict[f"MEAS.sCoilSelectMeas.aRxCoilSelectData.0.asList.{n}.lRxChannelConnected"])
-        new_dict["siemens"]["MEAS"]["asCoilSelectMeas"]["ADC"]["lADCChannelConnected"].append(original_dict[f"MEAS.sCoilSelectMeas.aRxCoilSelectData.0.asList.{n}.lADCChannelConnected"])
-        
+        new_dict["siemens"]["MEAS"]["asCoilSelectMeas"]["ID"]["tCoilID"].append(
+            original_dict[
+                f"MEAS.sCoilSelectMeas.aRxCoilSelectData.0.asList.{n}.sCoilElementID.tCoilID"
+            ]
+        )
+        new_dict["siemens"]["MEAS"]["asCoilSelectMeas"]["Coil"]["lCoilCopy"].append(
+            original_dict[
+                f"MEAS.sCoilSelectMeas.aRxCoilSelectData.0.asList.{n}.sCoilElementID.lCoilCopy"
+            ]
+        )
+        new_dict["siemens"]["MEAS"]["asCoilSelectMeas"]["Elem"]["tElement"].append(
+            original_dict[
+                f"MEAS.sCoilSelectMeas.aRxCoilSelectData.0.asList.{n}.sCoilElementID.tElement"
+            ]
+        )
+        new_dict["siemens"]["MEAS"]["asCoilSelectMeas"]["Select"][
+            "lElementSelected"
+        ].append(
+            original_dict[
+                f"MEAS.sCoilSelectMeas.aRxCoilSelectData.0.asList.{n}.lElementSelected"
+            ]
+        )
+        new_dict["siemens"]["MEAS"]["asCoilSelectMeas"]["Rx"][
+            "lRxChannelConnected"
+        ].append(
+            original_dict[
+                f"MEAS.sCoilSelectMeas.aRxCoilSelectData.0.asList.{n}.lRxChannelConnected"
+            ]
+        )
+        new_dict["siemens"]["MEAS"]["asCoilSelectMeas"]["ADC"][
+            "lADCChannelConnected"
+        ].append(
+            original_dict[
+                f"MEAS.sCoilSelectMeas.aRxCoilSelectData.0.asList.{n}.lADCChannelConnected"
+            ]
+        )
+
     return new_dict
 
 
@@ -461,23 +501,23 @@ def _expand_all_as_sequence(tree):
 
     def expand_element(parent, element):
         # Check if the element's text is a vector-like value
-        if element.text and element.text.startswith('[') and element.text.endswith(']'):
+        if element.text and element.text.startswith("[") and element.text.endswith("]"):
             # Parse the vector values
-            values = element.text.strip('[]').split(',')
+            values = element.text.strip("[]").split(",")
             values = [v.strip() for v in values]
-            
+
             # Expand the element into multiple repeated elements
             for value in values:
                 new_elem = etree.Element(element.tag)
                 new_elem.text = value
                 parent.append(new_elem)
-            
+
             # Remove the original vector-valued element
             parent.remove(element)
-    
+
     # Traverse and process the tree
-    for parent in root.xpath('.//*'):  # XPath selects all elements in the tree
+    for parent in root.xpath(".//*"):  # XPath selects all elements in the tree
         for child in list(parent):
             expand_element(parent, child)
-    
+
     return tree

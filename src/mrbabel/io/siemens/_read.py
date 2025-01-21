@@ -17,10 +17,10 @@ from ..converters._siemens2mrd import read_siemens_header, read_siemens_acquisit
 
 
 def read_siemens(
-    path: str, 
+    path: str,
     sort: bool = True,
     xml_file: str | None = None,
-    xsl_file: str | None = None,    
+    xsl_file: str | None = None,
 ) -> mrd.ReconBuffer | list[mrd.ReconBuffer] | list[mrd.Acquisition]:
     """
     Read input Siemens k-space file.
@@ -33,11 +33,11 @@ def read_siemens(
         If ``True``, sort list of MRD Acquisitions into a MRD ReconBuffer.
         The default is ``True``.
     xml_file : str | None, optional
-        XML file to create xml string from Twix header. If not 
+        XML file to create xml string from Twix header. If not
         provided, uses the same default as "siemens_to_ismrmrd".
         The default is ``None``.
     xsl_file : str | None, optional
-        XSLT file to convert Twix xml string to MRD. If not 
+        XSLT file to convert Twix xml string to MRD. If not
         provided, uses the same default as "siemens_to_ismrmrd".
         The default is ``None``.
 
@@ -67,9 +67,9 @@ def read_siemens(
         twix_obj = twix_obj[-1]
     head = read_siemens_header(twix_obj["hdr"])
     acquisitions = read_siemens_acquisitions(twix_obj["hdr"], twix_obj["mdb"])
-    
+
     if sort:
         recon_buffers = sort_kspace(acquisitions, head)
         return recon_buffers, head
-    
+
     return acquisitions, head
