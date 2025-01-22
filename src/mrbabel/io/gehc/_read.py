@@ -8,6 +8,7 @@ import mrd
 
 try:
     import getools
+
     __GEHC_AVAILABLE__ = True
 except Exception:
     __GEHC_AVAILABLE__ = False
@@ -42,7 +43,9 @@ def read_gehc(
 
     """
     if __GEHC_AVAILABLE__ is False:
-        print("GEHC reader is private - ask for access at https://docs.google.com/forms/d/1BvA1h8qb9GmndqiXMplQbf3IujgBIehQ1psnfmW0tew/edit")
+        print(
+            "GEHC reader is private - ask for access at https://docs.google.com/forms/d/1BvA1h8qb9GmndqiXMplQbf3IujgBIehQ1psnfmW0tew/edit"
+        )
     if isinstance(path, str) and (path.endswith(".h5") or path.endswith(".7")):
         path = [path]
     else:
@@ -51,7 +54,8 @@ def read_gehc(
         raise ValueError("GEHC file not found in target directory.")
     if len(path) > 1:
         raise warnings.warn(
-            f"Found multiple ({len(path)}) PFiles/ScanArchive files - picking the first", UserWarning
+            f"Found multiple ({len(path)}) PFiles/ScanArchive files - picking the first",
+            UserWarning,
         )
     path = path[0]
 

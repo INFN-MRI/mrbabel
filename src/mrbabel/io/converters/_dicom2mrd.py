@@ -57,7 +57,7 @@ def _convert_patient_position(PatientPosition):
 
 def read_dicom_header(dset: pydicom.Dataset) -> mrd.Header:
     """Create MRD Header from a DICOM file."""
-    mrdhead = mrd.Header()
+    mrdhead = mrd.Header(version=2.0)
 
     # fill patient information
     mrdhead.subject_information = mrd.SubjectInformationType()
@@ -98,6 +98,14 @@ def read_dicom_header(dset: pydicom.Dataset) -> mrd.Header:
         mrdhead.measurement_information.protocol_name = dset.SeriesDescription
     except Exception:
         pass
+    try:
+        mrdhead.measurement_information.series_date = dset.SeriesDate
+    except Exception:
+        pass
+    try:
+        mrdhead.measurement_information.series_time = dset.SeriesTime
+    except Exception:
+        pass
     mrdhead.measurement_information.frame_of_reference_uid = dset.FrameOfReferenceUID
 
     # fill acquisition system information
@@ -129,7 +137,10 @@ def read_dicom_header(dset: pydicom.Dataset) -> mrd.Header:
     enc.encoded_space.matrix_size.z = 1
     enc.encoded_space.field_of_view_mm = mrd.FieldOfViewMm()
 
-    if dset.SOPClassUID.name == "Enhanced MR Image Storage":
+    if (
+        hasattr(dset, "SOPClassUID")
+        and dset.SOPClassUID.name == "Enhanced MR Image Storage"
+    ):
         slice_thickness = float(
             dset.PerFrameFunctionalGroupsSequence[0]
             .PixelMeasuresSequence[0]
@@ -194,7 +205,10 @@ def read_dicom_header(dset: pydicom.Dataset) -> mrd.Header:
     enc.encoding_limits.contrast = mrd.LimitType()
 
     enc.parallel_imaging = mrd.ParallelImagingType()
-    if dset.SOPClassUID.name == "Enhanced MR Image Storage":
+    if (
+        hasattr(dset, "SOPClassUID")
+        and dset.SOPClassUID.name == "Enhanced MR Image Storage"
+    ):
         enc.parallel_imaging.acceleration_factor.kspace_encoding_step_1 = (
             dset.SharedFunctionalGroupsSequence[0]
             .MRModifierSequence[0]
@@ -235,7 +249,10 @@ def read_dicom_images(
 
     # Sort images by instance number, as they may be read out of order
     def get_instance_number(item):
-        return item.InstanceNumber
+        try:
+            return item.InstanceNumber
+        except Exception:
+            return 0
 
     dsets = sorted(dsets, key=get_instance_number)
 
@@ -413,16 +430,19 @@ def read_dicom_images(
                 )
                 del dset["FloatPixelData"]
             except Exception:
-                data = (
-                    np.frombuffer(dset.DoubleFloatPixelData, dtype=np.float64)
-                    .copy()
-                    .astype(np.float32)
-                    .reshape(dset.Rows)
-                )
-                del dset["DoubleFloatPixelData"]
+                try:
+                    data = (
+                        np.frombuffer(dset.DoubleFloatPixelData, dtype=np.float64)
+                        .copy()
+                        .astype(np.float32)
+                        .reshape(dset.Rows)
+                    )
+                    del dset["DoubleFloatPixelData"]
+                except Exception:
+                    data = None
 
         # Store the complete base64, json-formatted DICOM header so that non-MRD fields can be
-        # recapitulated when generating DICOMs from MRD images
+        # r ecapitulated when generating DICOMs from MRD images
         meta["DicomJson"] = base64.b64encode(dset.to_json().encode("utf-8")).decode(
             "utf-8"
         )
