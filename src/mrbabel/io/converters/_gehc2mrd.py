@@ -8,15 +8,38 @@ __all__ = [
 import mrd
 import getools
 
+from ...utils import search_user_param
+
 from ._dicom2mrd import read_dicom_header
 
 
 def read_gehc_header(
-    gehc_hdr: dict, mrd_template: mrd.Header | None = None
+    gehc_hdr: dict, hdr_template: mrd.Header | None = None
 ) -> mrd.Header:
     """Create MRD Header from a GEHC file."""
-    dset = getools.raw2dicom(gehc_hdr, False, mrd_template)
+    dset = getools.raw2dicom(gehc_hdr, False, hdr_template)
     mrd_hdr = read_dicom_header(dset)
+
+    # update with blueprint
+    if hdr_template is not None:
+        psdname = gehc_hdr["image"]["psd_iname"].strip()
+        is_fidall = (
+            "fidall" in psdname
+            or "3drad" in psdname
+            or "silen" in psdname
+            or "burzte" in psdname
+        )
+
+        # replace encoding
+        encoding = hdr_template.encoding
+        if is_fidall:
+            spacing = mrd_hdr.encoding[-1].encoded_space.field_of_view_mm.z
+
+            encoding[-1].encoded_space.field_of_view_mm.x = gehc_hdr["image"]["dfov"]
+            encoding[-1].encoded_space.field_of_view_mm.y = gehc_hdr["image"][
+                "dfov_rect"
+            ]
+            # encoding[-1].encoded_space.field_of_view_mm.z = gehc_hdr["image"]["dfov_rect"]
 
 
 def read_gehc_acquisitions(): ...

@@ -22,7 +22,9 @@ from ..sorting import sort_kspace
 def read_gehc(
     path: str,
     sort: bool = True,
-) -> mrd.ReconBuffer | list[mrd.ReconBuffer] | list[mrd.Acquisition]:
+    head_template: mrd.Header | None = None,
+    acquisitions_template: list[mrd.Acquisition] | None = None,
+) -> tuple[mrd.ReconBuffer | list[mrd.ReconBuffer] | list[mrd.Acquisition], mrd.Header]:
     """
     Read input GE HealthCare k-space file.
 
@@ -33,6 +35,16 @@ def read_gehc(
     sort : bool, optional
         If ``True``, sort list of MRD Acquisitions into a MRD ReconBuffer.
         The default is ``True``.
+    head_template : mrd.Header | None, optional
+        MRD Header as defined at sequence design step. If provided,
+        uses it as a blueprint to define encoding limits and sequence parameters.
+        It is update with scan specific info (SubjectInformation, etc) from raw data.
+        The default is ``None`` (uses raw header only).
+    acquisitions_template : list[mrd.Acquisition] | None, optional
+        MRD Acquisition(s) as defined at sequence design step. If provided,
+        uses it as a blueprint to define data ordering.
+        It is update with scan specific info (orientation, etc) from raw data.
+        The default is ``None`` (uses raw header only).
 
     Returns
     -------
@@ -61,8 +73,8 @@ def read_gehc(
 
     # reading
     gehc_raw, gehc_head = getools.read_rawdata(path)
-    head = read_gehc_header(gehc_head)
-    acquisitions = read_gehc_acquisitions(head, gehc_raw)
+    head = read_gehc_header(gehc_head, head_template)
+    acquisitions = read_gehc_acquisitions(head, gehc_raw, acquisitions_template)
 
     if sort:
         recon_buffers = sort_kspace(acquisitions, head)
