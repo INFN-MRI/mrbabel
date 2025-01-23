@@ -49,6 +49,11 @@ def mock_dicom_dataset():
     sop_class_uid = MagicMock()
     sop_class_uid.name = "MR Image Storage"
     dset.SOPClassUID = sop_class_uid
+    
+    # Mocking Sequence Parameters
+    dset.FlipAngle = 10.0
+    dset.RepetitionTime = 100.0
+    dset.EchoTime = 5.0
 
     return dset
 
@@ -75,7 +80,7 @@ def test_read_dicom_header_basic(mock_dicom_dataset):
     # Assert measurement information
     assert mrd_header.measurement_information.measurement_id == "1.2.3.4.5.6.7"
     assert mrd_header.measurement_information.patient_position.name == "H_FS"
-    assert mrd_header.measurement_information.protocol_name == "Test Series"
+    assert mrd_header.measurement_information.series_description == "Test Series"
     assert (
         mrd_header.measurement_information.frame_of_reference_uid == "1.2.3.4.5.6.7.8"
     )

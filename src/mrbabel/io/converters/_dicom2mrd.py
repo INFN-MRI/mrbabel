@@ -75,7 +75,10 @@ def read_dicom_header(dset: pydicom.Dataset) -> mrd.Header:
         mrdhead.subject_information.patient_birthdate = dset.PatientBirthDate
     except Exception:
         pass
-    mrdhead.subject_information.patient_gender = mrd.PatientGender[dset.PatientSex]
+    try:
+        mrdhead.subject_information.patient_gender = mrd.PatientGender[dset.PatientSex]
+    except Exception:
+        mrdhead.subject_information.patient_gender = mrd.PatientGender["O"]
 
     # fill study information
     mrdhead.study_information = mrd.StudyInformationType()
@@ -95,7 +98,11 @@ def read_dicom_header(dset: pydicom.Dataset) -> mrd.Header:
         dset.PatientPosition
     )
     try:
-        mrdhead.measurement_information.protocol_name = dset.SeriesDescription
+        mrdhead.measurement_information.protocol_name = dset.ProtocolName
+    except Exception:
+        pass
+    try:
+        mrdhead.measurement_information.series_description = dset.SeriesDescription
     except Exception:
         pass
     try:
@@ -104,6 +111,10 @@ def read_dicom_header(dset: pydicom.Dataset) -> mrd.Header:
         pass
     try:
         mrdhead.measurement_information.series_time = dset.SeriesTime
+    except Exception:
+        pass
+    try:
+        mrdhead.measurement_information.initial_series_number = dset.SeriesNumber
     except Exception:
         pass
     mrdhead.measurement_information.frame_of_reference_uid = dset.FrameOfReferenceUID
@@ -225,6 +236,13 @@ def read_dicom_header(dset: pydicom.Dataset) -> mrd.Header:
 
     mrdhead.encoding.append(enc)
     mrdhead.sequence_parameters = mrd.SequenceParametersType()
+    mrdhead.sequence_parameters.flip_angle_deg = [float(dset.FlipAngle)]
+    mrdhead.sequence_parameters.t_r = [float(dset.RepetitionTime)]
+    mrdhead.sequence_parameters.t_e = [float(dset.EchoTime)]
+    try:
+        mrdhead.sequence_parameters.t_i = [float(dset.InversionTime)]
+    except Exception:
+        pass
 
     mrdhead.user_parameters = mrd.UserParametersType()
 

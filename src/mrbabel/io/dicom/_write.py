@@ -13,9 +13,8 @@ from multiprocessing.dummy import Pool as ThreadPool
 import numpy as np
 import mrd
 
-from ...data import unsort_images
-
 from ..converters._mrd2dicom import dump_dicom_images
+from ..sorting import unsort_images
 
 
 def write_dicom(

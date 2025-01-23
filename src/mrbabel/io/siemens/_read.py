@@ -7,10 +7,10 @@ import warnings
 import mrd
 import twixtools
 
-from ...data import sort_kspace
 from ..._file_search import get_paths
 
 from ..converters._siemens2mrd import read_siemens_header, read_siemens_acquisitions
+from ..sorting import sort_kspace
 
 
 def read_siemens(

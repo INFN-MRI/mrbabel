@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import mrd
 
-from mrbabel.data.sorting import sort_images
+from mrbabel.io.sorting import sort_images
 
 
 # Fixtures for creating test data

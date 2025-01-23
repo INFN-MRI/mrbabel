@@ -12,9 +12,9 @@ import mrd
 
 from ..._file_search import get_paths
 
-from ...data import sort_images
 
 from ..converters._dicom2mrd import read_dicom_header, read_dicom_images
+from ..sorting import sort_images
 
 
 def read_dicom(

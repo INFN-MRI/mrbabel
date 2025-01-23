@@ -236,10 +236,6 @@ def read_siemens_acquisition(twix_acquisition, twix_hdr, enc_ref) -> mrd.Acquisi
     # # Resize the data structure (for example, using numpy arrays or lists)
     acquisition.data = twix_acquisition.data
 
-    # # If trajectory dimensions are present, resize and fill the trajectory data
-    # if acq.trajectory_dimensions > 0:
-    #     acquisition.trajectory = acq.traj
-
     return acquisition
 
 

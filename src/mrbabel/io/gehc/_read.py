@@ -13,10 +13,10 @@ try:
 except Exception:
     __GEHC_AVAILABLE__ = False
 
-from ...data import sort_kspace
 from ..._file_search import get_paths
 
 from ..converters._gehc2mrd import read_gehc_header, read_gehc_acquisitions
+from ..sorting import sort_kspace
 
 
 def read_gehc(

@@ -6,8 +6,9 @@ import warnings
 
 import mrd
 
-from ...data import sort_kspace
 from ..._file_search import get_paths
+
+from ..sorting import sort_kspace
 
 
 def read_mrd(
