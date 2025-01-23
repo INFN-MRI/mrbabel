@@ -157,8 +157,8 @@ def sort_kspace(
     for n in range(len(acquisitions)):
         idx = _encoding_spaces[n]
         if acquisitions[n].trajectory.size > 0:
-            _density[idx].append(acquisitions[n].trajectory[..., -1])
-            _trajectory[idx].append(acquisitions[n].trajectory[..., :-1])
+            _density[idx].append(acquisitions[n].trajectory.T[..., -1])
+            _trajectory[idx].append(acquisitions[n].trajectory.T[..., :-1])
         _data[idx].append(acquisitions[n].data)
         _headers[idx].append(acquisitions[n].head)
 
@@ -366,7 +366,7 @@ def unsort_kspace(
         if buffer.trajectory is not None and buffer.density is not None:
             trajectory = np.concatenate(
                 (buffer.trajectory, buffer.density[..., None]), axis=-1
-            )
+            ).T
         else:
             trajectory = None
 

@@ -98,7 +98,7 @@ def read_ismrmrd_acquisition(acq: ismrmrd.Acquisition) -> mrd.Acquisition:
 
     # If trajectory dimensions are present, resize and fill the trajectory data
     if acq.trajectory_dimensions > 0:
-        acquisition.trajectory = acq.traj
+        acquisition.trajectory = acq.traj.T
 
     return acquisition
 

@@ -14,4 +14,5 @@ except Exception:
 
 __all__.append("testdata")
 
-from . import io
+from . import io  # noqa
+from . import utils  # noqa

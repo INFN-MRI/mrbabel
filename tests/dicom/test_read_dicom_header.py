@@ -49,7 +49,7 @@ def mock_dicom_dataset():
     sop_class_uid = MagicMock()
     sop_class_uid.name = "MR Image Storage"
     dset.SOPClassUID = sop_class_uid
-    
+
     # Mocking Sequence Parameters
     dset.FlipAngle = 10.0
     dset.RepetitionTime = 100.0

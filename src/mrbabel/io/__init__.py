@@ -31,3 +31,9 @@ from . import siemens  # noqa
 from .siemens import *  # noqa
 
 __all__.extend(siemens.__all__)
+
+from . import fidall  # noqa
+
+from .fidall import *  # noqa
+
+__all__.extend(fidall.__all__)

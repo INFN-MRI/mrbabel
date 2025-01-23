@@ -131,42 +131,42 @@ def read_siemens_acquisition(twix_acquisition, twix_hdr, enc_ref) -> mrd.Acquisi
     # Fill in the header fields
     defs = mrd.AcquisitionFlags
     if twix_acquisition.mdh.EvalInfoMask & (1 << 25):
-        acquisition.flags = defs.IS_NOISE_MEASUREMENT
+        acquisition.head.flags = defs.IS_NOISE_MEASUREMENT
     if twix_acquisition.mdh.EvalInfoMask & (1 << 28):
-        acquisition.flags = defs.FIRST_IN_SLICE
+        acquisition.head.flags = defs.FIRST_IN_SLICE
     if twix_acquisition.mdh.EvalInfoMask & (1 << 29):
-        acquisition.flags = defs.LAST_IN_SLICE
+        acquisition.head.flags = defs.LAST_IN_SLICE
     if twix_acquisition.mdh.EvalInfoMask & (1 << 11):
-        acquisition.flags = defs.LAST_IN_REPETITION
+        acquisition.head.flags = defs.LAST_IN_REPETITION
 
     # if a line is both image and ref, then do not set the ref flag
     if twix_acquisition.mdh.EvalInfoMask & (1 << 23):
-        acquisition.flags = defs.IS_PARALLEL_CALIBRATION_AND_IMAGING
+        acquisition.head.flags = defs.IS_PARALLEL_CALIBRATION_AND_IMAGING
     else:
         if twix_acquisition.mdh.EvalInfoMask & (1 << 22):
-            acquisition.flags = defs.IS_PARALLEL_CALIBRATION
+            acquisition.head.flags = defs.IS_PARALLEL_CALIBRATION
 
     if twix_acquisition.mdh.EvalInfoMask & (1 << 24):
-        acquisition.flags = defs.IS_REVERSE
+        acquisition.head.flags = defs.IS_REVERSE
     if twix_acquisition.mdh.EvalInfoMask & (1 << 11):
-        acquisition.flags = defs.LAST_IN_MEASUREMENT
+        acquisition.head.flags = defs.LAST_IN_MEASUREMENT
     if twix_acquisition.mdh.EvalInfoMask & (1 << 21):
-        acquisition.flags = defs.IS_PHASECORR_DATA
+        acquisition.head.flags = defs.IS_PHASECORR_DATA
     if twix_acquisition.mdh.EvalInfoMask & (1 << 1):
-        acquisition.flags = defs.IS_NAVIGATION_DATA
+        acquisition.head.flags = defs.IS_NAVIGATION_DATA
     if twix_acquisition.mdh.EvalInfoMask & (1 << 1):
-        acquisition.flags = defs.IS_RTFEEDBACK_DATA
+        acquisition.head.flags = defs.IS_RTFEEDBACK_DATA
     if twix_acquisition.mdh.EvalInfoMask & (1 << 2):
-        acquisition.flags = defs.IS_HPFEEDBACK_DATA
+        acquisition.head.flags = defs.IS_HPFEEDBACK_DATA
     if twix_acquisition.mdh.EvalInfoMask & (1 << 51):
-        acquisition.flags = defs.IS_DUMMYSCAN_DATA
+        acquisition.head.flags = defs.IS_DUMMYSCAN_DATA
     if twix_acquisition.mdh.EvalInfoMask & (1 << 10):
-        acquisition.flags = defs.IS_SURFACECOILCORRECTIONSCAN_DATA
+        acquisition.head.flags = defs.IS_SURFACECOILCORRECTIONSCAN_DATA
     if twix_acquisition.mdh.EvalInfoMask & (1 << 5):
-        acquisition.flags = defs.IS_DUMMYSCAN_DATA
+        acquisition.head.flags = defs.IS_DUMMYSCAN_DATA
 
     if twix_acquisition.mdh.EvalInfoMask & (1 << 46):
-        acquisition.flags = defs.LAST_IN_MEASUREMENT
+        acquisition.head.flags = defs.LAST_IN_MEASUREMENT
 
     encoding_counter = mrd.EncodingCounters()
     encoding_counter.kspace_encode_step_1 = twix_acquisition.mdh.Counter.Lin
