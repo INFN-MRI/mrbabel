@@ -276,9 +276,10 @@ def convert_measurement_information(measurement_information):
     )
 
     if measurement_information.relativeTablePosition:
-        m.relative_table_position = convert_measurement_information(
-            measurement_information.relativeTablePosition
-        )
+        m.relative_table_position = mrd.ThreeDimensionalFloat()
+        m.relative_table_position.x = measurement_information.relativeTablePosition.x
+        m.relative_table_position.y = measurement_information.relativeTablePosition.y
+        m.relative_table_position.z = measurement_information.relativeTablePosition.z
 
     if measurement_information.initialSeriesNumber:
         m.initial_series_number = measurement_information.initialSeriesNumber

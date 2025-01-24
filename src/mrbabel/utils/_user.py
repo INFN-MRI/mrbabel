@@ -1,11 +1,11 @@
 """User parameters search utils."""
 
-__all__ = ["search_user_param"]
+__all__ = ["get_user_param"]
 
 import mrd
 
 
-def search_user_param(head: mrd.Header, key: str):
+def get_user_param(head: mrd.Header, key: str):
     """
     Search for a given key in mrd.Header UserParameters field.
 

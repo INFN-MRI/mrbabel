@@ -37,3 +37,9 @@ from . import fidall  # noqa
 from .fidall import *  # noqa
 
 __all__.extend(fidall.__all__)
+
+from . import gehc  # noqa
+
+from .gehc import *  # noqa
+
+__all__.extend(gehc.__all__)

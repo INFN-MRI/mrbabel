@@ -72,9 +72,11 @@ def read_gehc(
     path = path[0]
 
     # reading
-    gehc_raw, gehc_head = getools.read_rawdata(path)
+    gehc_raw, gehc_head = getools.read_rawdata(path, acquisition_order=True)
     head = read_gehc_header(gehc_head, head_template)
-    acquisitions = read_gehc_acquisitions(head, gehc_raw, acquisitions_template)
+    acquisitions = read_gehc_acquisitions(
+        gehc_head, gehc_raw, head_template, acquisitions_template
+    )
 
     if sort:
         recon_buffers = sort_kspace(acquisitions, head)
