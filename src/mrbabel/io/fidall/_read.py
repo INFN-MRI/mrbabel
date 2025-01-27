@@ -180,14 +180,18 @@ def read_fidall(
     npts = meta.traj.shape[-2]
     nviews = meta.traj.shape[-3]
     nslices = enc.encoded_space.matrix_size.z
-
+    ncontrasts = meta.traj.shape[-4]
+    
     if "readout_length" in meta.user:
         ncontrasts = len(np.unique(meta.method.VariableTE))
-        trajectory = np.repeat(meta.traj, ncontrasts, axis=0)
+        trajectory = np.repeat(meta.traj, ncontrasts, axis=-3)
+        dcf = np.repeat(meta.dcf, ncontrasts, axis=-2)           
     else:
-        ncontrasts = meta.traj.shape[-4]
         trajectory = meta.traj
-
+        dcf = meta.dcf
+    dcf, _ = np.broadcast_arrays(dcf, trajectory[..., 0])
+    
+    # set up indexes
     view_idx = np.arange(nviews)
     slice_idx = np.arange(nslices)
     contrast_idx = np.arange(ncontrasts)
@@ -199,36 +203,52 @@ def read_fidall(
                 slice_idx[None, :, None],
                 contrast_idx[None, None, :],
             )
+            trajectory = trajectory.transpose(2, 0, 1, 3, 4)
+            dcf = dcf.transpose(2, 0, 1, 3)
+
         if meta.user["separable_mode"] == 2:
             view_idx, contrast_idx, slice_idx = np.broadcast_arrays(
                 view_idx[:, None, None],
                 contrast_idx[None, :, None],
                 slice_idx[None, None, :],
             )
+            trajectory = trajectory.transpose(2, 1, 0, 3, 4)
+            dcf = dcf.transpose(2, 1, 0, 3)
+            
         if meta.user["separable_mode"] == 3:
             slice_idx, contrast_idx, view_idx = np.broadcast_arrays(
                 slice_idx[:, None, None],
                 contrast_idx[None, :, None],
                 view_idx[None, None, :],
             )
+            trajectory = trajectory.transpose(1, 0, 2, 3, 4)
+            dcf = dcf.transpose(1, 0, 2, 3)
+            
         if meta.user["separable_mode"] == 4:
             slice_idx, view_idx, contrast_idx = np.broadcast_arrays(
                 slice_idx[:, None, None],
                 view_idx[None, :, None],
                 contrast_idx[None, None, :],
             )
+            trajectory = trajectory.transpose(1, 2, 0, 3, 4)
+            dcf = dcf.transpose(1, 2, 0, 3)
+            
         if meta.user["separable_mode"] == 5:
             contrast_idx, slice_idx, view_idx = np.broadcast_arrays(
                 contrast_idx[:, None, None],
                 slice_idx[None, :, None],
                 view_idx[None, None, :],
             )
+            
         if meta.user["separable_mode"] == 6:
             contrast_idx, view_idx, slice_idx = np.broadcast_arrays(
                 contrast_idx[:, None, None],
                 view_idx[None, :, None],
                 slice_idx[None, None, :],
             )
+            trajectory = trajectory.transpose(0, 2, 1, 3, 4)
+            dcf = dcf.transpose(0, 2, 1, 3)
+            
         view_idx = view_idx.ravel()
         slice_idx = slice_idx.ravel()
         contrast_idx = contrast_idx.ravel()
@@ -238,6 +258,9 @@ def read_fidall(
             view_idx[:, None],
             contrast_idx[None, :],
         )
+        trajectory = trajectory.transpose(1, 0, 2, 3)
+        dcf = dcf.transpose(1, 0, 2)
+        
         view_idx = view_idx.ravel()
         slice_idx = np.zeros_like(view_idx)
         contrast_idx = contrast_idx.ravel()
@@ -250,8 +273,7 @@ def read_fidall(
     trajectory = trajectory.reshape(-1, *trajectory.shape[-2:])
 
     # get DCF
-    dcf = meta.dcf.reshape(-1, meta.dcf.shape[-1])
-    _, dcf = np.broadcast_arrays(trajectory[..., 0], dcf)
+    dcf = dcf.reshape(-1, meta.dcf.shape[-1])
     dcf = dcf[..., None]
 
     # append dcf as last trajectory dim
@@ -271,7 +293,9 @@ def read_fidall(
         idx.kspace_encode_step_1 = view_idx[n]
         if ndims == 3:
             idx.kspace_encode_step_2 = slice_idx[n]
+            idx.slice = 0
         else:
+            idx.kspace_encode_step_2 = 0
             idx.slice = slice_idx[n]
         idx.contrast = contrast_idx[n]
         acq.head.idx = idx
@@ -280,7 +304,6 @@ def read_fidall(
         acq.head.discard_post = meta.adc[1]
         acq.head.center_sample = npts // 2
         acq.head.sample_time_us = sampling_time
-        acq.head.trajectory = trajectory[n].T
 
         # flags
         if idx.kspace_encode_step_1 == 0:
@@ -303,6 +326,8 @@ def read_fidall(
             acq.head.flags = defs.LAST_IN_CONTRAST
         if acq.head.scan_counter == nscans - 1:
             acq.head.flags = defs.LAST_IN_MEASUREMENT
+            
+        acq.trajectory = trajectory[n].T
 
         acquisitions.append(acq)
 

@@ -68,4 +68,9 @@ def deserialize_array(base64_string: str) -> np.ndarray:
         return np.frombuffer(data, dtype=dtype).reshape(shape)
 
     except Exception:
-        return json_string
+        try:
+            json_string = json_string.decode("utf-8")
+            py_dict = json.loads(json_string)
+            return py_dict
+        except Exception:   
+            return json_string

@@ -6,8 +6,6 @@ import numpy as np
 
 import mrd
 
-from ..utils import get_user_param
-
 def sort_images(images: list[mrd.Image], head: mrd.Header) -> mrd.ImageArray:
     """
     Sort input set of MRD Images into a MRD ImageArray.
@@ -211,97 +209,54 @@ def sort_kspace(
         n_slices = len(np.unique(slice_idx))
         n_contrasts = len(np.unique(contrast_idx))
         
-        # Check for fast reshape modes
-        reshape_mode = 0  # default = full (slow) reordering in loop
-        if (op_idx == 0).all():
-            reshape_mode = get_user_param(head, "separable_mode")
-            if reshape_mode is None:
-                reshape_mode = 0
-        
-        # reshape
-        # case 1: (nreps, nslices, ncontrasts)
-        if reshape_mode == 1:
-            pass
-        # data = data.reshape(ncoils, nreps, nz, ncontrasts, npts)
-        # data = data.transpose(0, 2, 3, 1, 4)
+        # Sort data and trajectory
+        buffered_data = np.zeros(
+            (
+                n_contrasts,
+                n_slices,
+                n_phases,
+                n_coils,
+                n_pts,
+            ),
+            dtype=np.complex64,
+        )
+        for idx in range(data.shape[0]):
+            buffered_data[contrast_idx[idx], slice_idx[idx], phase_idx[idx]] = data[idx]
 
-        # # case 2: (nreps, ncontrasts, nslices)
-        if reshape_mode == 2:
-            pass
-        # data = data.reshape(ncoils, nreps, ncontrasts, nz, npts)
-        # data = data.transpose(0, 3, 2, 1, 4)
+        # Reshape to (ncoils, n_contrasts, n_slices, n_phases, n_pts)
+        buffered_data = buffered_data.transpose(3, 0, 1, 2, 4)
 
-        # # case 3: (nslices, ncontrasts, nreps)
-        if reshape_mode == 3:
-            pass
-        # data = data.reshape(ncoils, nz, ncontrasts, nreps, npts)
-
-        # # case 4: (nslices, nreps, ncontrasts)
-        if reshape_mode == 4:
-            pass
-        # data = data.reshape(ncoils, nz, nreps, ncontrasts, npts)
-        # data = data.transpose(0, 1, 3, 2, 4)
-
-        # # case 5: (ncontrasts, nslices, nreps)
-        if reshape_mode == 5:
-            pass
-        # data = data.reshape(ncoils, ncontrasts, nz, nreps, npts)
-        # data = data.transpose(0, 2, 1, 3, 4)
-
-        # # case 6: (ncontrasts, nreps, nslices)
-        if reshape_mode == 6:
-            pass
-        # data = data.reshape(ncoils, ncontrasts, nreps, nz, npts)
-        # data = data.transpose(0, 3, 1, 2, 4)
-            
-        if reshape_mode == 0:
-            buffered_data = np.zeros(
+        if trajectory.size > 0:
+            n_dims = trajectory.shape[-1]
+            buffered_trajectory = np.zeros(
                 (
                     n_contrasts,
                     n_slices,
                     n_phases,
-                    n_coils,
+                    n_pts,
+                    n_dims,
+                ),
+                dtype=np.complex64,
+            )
+            buffered_density = np.zeros(
+                (
+                    n_contrasts,
+                    n_slices,
+                    n_phases,
                     n_pts,
                 ),
                 dtype=np.complex64,
             )
             for idx in range(data.shape[0]):
-                buffered_data[contrast_idx[idx], slice_idx[idx], phase_idx[idx]] = data[idx]
-    
-            # Reshape to (ncoils, n_contrasts, n_slices, n_phases, n_pts)
-            buffered_data = buffered_data.transpose(3, 0, 1, 2, 4)
-    
-            if trajectory.size > 0:
-                n_dims = trajectory.shape[-1]
-                buffered_trajectory = np.zeros(
-                    (
-                        n_contrasts,
-                        n_slices,
-                        n_phases,
-                        n_pts,
-                        n_dims,
-                    ),
-                    dtype=np.complex64,
+                buffered_trajectory[
+                    contrast_idx[idx], slice_idx[idx], phase_idx[idx]
+                ] = trajectory[idx]
+                buffered_density[contrast_idx[idx], slice_idx[idx], phase_idx[idx]] = (
+                    density[idx]
                 )
-                buffered_density = np.zeros(
-                    (
-                        n_contrasts,
-                        n_slices,
-                        n_phases,
-                        n_pts,
-                    ),
-                    dtype=np.complex64,
-                )
-                for idx in range(data.shape[0]):
-                    buffered_trajectory[
-                        contrast_idx[idx], slice_idx[idx], phase_idx[idx]
-                    ] = trajectory[idx]
-                    buffered_density[contrast_idx[idx], slice_idx[idx], phase_idx[idx]] = (
-                        density[idx]
-                    )
-            else:
-                buffered_trajectory = None
-                buffered_density = None
+        else:
+            buffered_trajectory = None
+            buffered_density = None
 
         # Prepare sampling description
         sampling = mrd.SamplingDescription()

@@ -5,7 +5,9 @@ __all__ = [
     "read_siemens_acquisitions",
 ]
 
+import base64
 import copy
+import json
 import warnings
 import xml.etree.ElementTree as ET
 
@@ -24,8 +26,64 @@ from ._ismrmd2mrd import read_ismrmrd_header
 
 
 def read_siemens_header(
-    twix_hdr: dict, xml_file: str = None, xsl_file: str = None
+    twix_obj: list[dict],
+    hdr_template: mrd.Header | None = None,
+    xml_file: str = None, 
+    xsl_file: str = None,
 ) -> mrd.Header:
+    """Create MRD Header from a Siemens file."""
+    headers_val = [
+        _read_siemens_header(el["hdr"], xml_file, xsl_file) for el in twix_obj
+    ]
+
+    # find encoding map
+    enc_map = {}
+    reverse_enc_map = {}
+    headers_keys = []
+    for idx in range(len(twix_obj)):
+        keys = list(twix_obj[idx].keys())
+        if "hdr" in keys:
+            keys.remove("hdr")
+        if "hdr_str" in keys:
+            keys.remove("hdr_str")
+        headers_keys.append(keys[0])
+        enc_map[idx] = keys[0]
+        reverse_enc_map[keys[0]] = idx
+
+    # get encodings
+    headers = dict(zip(headers_keys, headers_val))
+    encodings = []
+    for idx in range(len(twix_obj)):
+        key = enc_map[idx]
+        if key != "image":  # make sure image is the last
+            encodings.extend(headers[key].encoding)
+    encodings.extend(headers["image"].encoding)
+
+    # update header
+    head = headers["image"]
+    head.encoding = encodings
+    head.user_parameters.user_parameter_base64.append(
+        mrd.UserParameterBase64Type(
+            name="EncodingMap",
+            value=base64.b64encode(json.dumps(enc_map).encode("utf-8")).decode("utf-8"),
+        )
+    )
+    
+    # update with blueprint
+    if hdr_template is not None:
+        # replace encoding
+        head.encoding = hdr_template.encoding
+
+        # replace contrast
+        head.sequence_parameters = hdr_template.sequence_parameters
+
+        # update user parameters
+        head.user_parameters.extend(hdr_template.user_parameters)
+    
+    return head
+
+
+def _read_siemens_header(twix_hdr: dict, xml_file: str, xsl_file: str) -> mrd.Header:
     """Create MRD Header from a Siemens file."""
     baseline_string = twix_hdr["Meas"]["tBaselineString"]
 
@@ -113,15 +171,53 @@ def read_siemens_header(
     return read_ismrmrd_header(ismrmrd_head)
 
 
-def read_siemens_acquisitions(
-    twix_hdr, twix_acquisitions, enc_ref=0
-) -> list[mrd.Acquisition]:
+def read_siemens_acquisitions(twix_obj, acquisitions_template=None) -> list[mrd.Acquisition]:
     """Create a list of MRD Acquisitions from a list of Siemens Acquisitions."""
-    nacquisitions = len(twix_acquisitions)
-    return [
-        read_siemens_acquisition(twix_acquisitions[n], twix_hdr, enc_ref)
-        for n in range(nacquisitions)
-    ]
+    nmeasurements = len(twix_obj)
+    acquisitions = []
+    for idx in range(nmeasurements):
+        twix_obj[idx].pop("hdr_str", None)
+        twix_hdr = twix_obj[idx].pop("hdr", None)
+        twix_acquisitions = list(twix_obj[idx].values())[0].mdb_list
+
+        # get acquisitions for current measurement
+        nacquisitions = len(twix_acquisitions)
+        acquisitions.extend(
+            [
+                read_siemens_acquisition(twix_acquisitions[n], twix_hdr, idx)
+                for n in range(nacquisitions)
+            ]
+        )
+    
+    # update
+    if acquisitions_template is not None:
+        for n in range(nacquisitions):
+            acquisitions[n].head.flags = acquisitions_template[n].head.flags
+            acquisitions[n].head.idx.kspace_encode_step_1 = acquisitions_template[
+                n
+            ].head.idx.kspace_encode_step_1
+            acquisitions[n].head.idx.kspace_encode_step_2 = acquisitions_template[
+                n
+            ].head.idx.kspace_encode_step_2
+            acquisitions[n].head.idx.slice = acquisitions_template[n].head.idx.slice
+            acquisitions[n].head.idx.contrast = acquisitions_template[
+                n
+            ].head.idx.contrast
+            acquisitions[n].head.discard_pre = acquisitions_template[n].head.discard_pre
+            acquisitions[n].head.discard_post = acquisitions_template[
+                n
+            ].head.discard_post
+            acquisitions[n].head.center_sample = acquisitions_template[
+                n
+            ].head.center_sample
+            acquisitions[n].head.encoding_space_ref = acquisitions_template[
+                n
+            ].head.encoding_space_ref
+            acquisitions[n].head.sample_time_us = acquisitions_template[
+                n
+            ].head.sample_time_us
+
+    return acquisitions
 
 
 def read_siemens_acquisition(twix_acquisition, twix_hdr, enc_ref) -> mrd.Acquisition:

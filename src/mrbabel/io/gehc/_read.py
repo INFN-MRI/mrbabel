@@ -73,7 +73,7 @@ def read_gehc(
 
     # reading
     gehc_raw, gehc_head = getools.read_rawdata(path, acquisition_order=True)
-    head = read_gehc_header(gehc_head, head_template)
+    head = read_gehc_header(gehc_head, head_template, acquisitions_template)
     acquisitions = read_gehc_acquisitions(
         gehc_head, gehc_raw, head_template, acquisitions_template
     )

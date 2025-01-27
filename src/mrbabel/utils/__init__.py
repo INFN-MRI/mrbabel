@@ -2,6 +2,12 @@
 
 __all__ = []
 
+from ._data_selection  import * # noqa
+
+from . import _data_selection  # noqa
+
+__all__.extend(_data_selection.__all__)
+
 from ._serialization import *  # noqa
 
 from . import _serialization  # noqa
