@@ -201,6 +201,7 @@ def read_siemens_acquisitions(
 
     # update
     if acquisitions_template is not None:
+        nacquisitions = len(acquisitions)
         for n in range(nacquisitions):
             acquisitions[n].head.flags = acquisitions_template[n].head.flags
             acquisitions[n].head.idx.kspace_encode_step_1 = acquisitions_template[

@@ -16,8 +16,11 @@ from ..sorting import sort_kspace
 
 
 def read_ismrmrd(
-    path: str, sort: bool = True
-) -> mrd.ReconBuffer | list[mrd.ReconBuffer] | list[mrd.Acquisition]:
+    path: str,
+    sort: bool = True,
+    head_template: mrd.Header | None = None,
+    acquisitions_template: list[mrd.Acquisition] | None = None,
+) -> tuple[mrd.ReconBuffer | list[mrd.ReconBuffer] | list[mrd.Acquisition], mrd.Header]:
     """
     Read input ISMRMRD k-space file.
 
@@ -25,6 +28,16 @@ def read_ismrmrd(
     ----------
     paths : str | list of str
         Path or list of file paths to ISMRMRD files.
+    head_template : mrd.Header | None, optional
+        MRD Header as defined at sequence design step. If provided,
+        uses it as a blueprint to define encoding limits and sequence parameters.
+        It is update with scan specific info (SubjectInformation, etc) from raw data.
+        The default is ``None`` (uses raw header only).
+    acquisitions_template : list[mrd.Acquisition] | None, optional
+        MRD Acquisition(s) as defined at sequence design step. If provided,
+        uses it as a blueprint to define data ordering.
+        It is update with scan specific info (orientation, etc) from raw data.
+        The default is ``None`` (uses raw header only).
     sort : bool, optional
         If ``True``, sort list of MRD Acquisitions into a MRD ReconBuffer.
         The default is ``True``.
@@ -58,8 +71,8 @@ def read_ismrmrd(
     ]
 
     # convert to MRD (ISMRMRD v2)
-    head = read_ismrmrd_header(head)
-    acquisitions = read_ismrmrd_acquisitions(acquisitions)
+    head = read_ismrmrd_header(head, head_template)
+    acquisitions = read_ismrmrd_acquisitions(acquisitions, acquisitions_template)
 
     if sort:
         recon_buffers, head = sort_kspace(acquisitions, head)

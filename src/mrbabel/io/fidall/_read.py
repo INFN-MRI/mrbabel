@@ -14,7 +14,7 @@ try:
 except Exception:
     __GEHC_AVAILABLE__ = False
 
-from ...utils import serialize_array
+from ...utils._serialization import serialize_array
 
 
 def read_fidall(

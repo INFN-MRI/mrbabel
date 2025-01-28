@@ -15,6 +15,7 @@ import mrd
 
 def read_ismrmrd_header(
     hdr: ismrmrd.xsd.ismrmrdschema.ismrmrd.ismrmrdHeader,
+    hdr_template: mrd.Header | None = None,
 ) -> mrd.Header:
     """Create MRD Header from a ISMRMRD Header."""
     h = mrd.Header()
@@ -54,14 +55,56 @@ def read_ismrmrd_header(
 
     h.waveform_information = [read_ismrmrd_waveform(w) for w in hdr.waveformInformation]
 
+    # update with blueprint
+    if hdr_template is not None:
+        # replace encoding
+        h.encoding = hdr_template.encoding
+
+        # replace contrast
+        h.sequence_parameters = hdr_template.sequence_parameters
+
+        # update user parameters
+        h.user_parameters.extend(hdr_template.user_parameters)
+
     return h
 
 
 def read_ismrmrd_acquisitions(
-    acquisitions: list[ismrmrd.Acquisition],
+    acquisitions, acquisitions_template=None
 ) -> list[mrd.Acquisition]:
     """Create a list of MRD Acquisitions from a list of ISMRMRD Acquisitions."""
-    return [read_ismrmrd_acquisition(acq) for acq in acquisitions]
+    acquisitions = [read_ismrmrd_acquisition(acq) for acq in acquisitions]
+
+    # update
+    if acquisitions_template is not None:
+        nacquisitions = len(acquisitions)
+        for n in range(nacquisitions):
+            acquisitions[n].head.flags = acquisitions_template[n].head.flags
+            acquisitions[n].head.idx.kspace_encode_step_1 = acquisitions_template[
+                n
+            ].head.idx.kspace_encode_step_1
+            acquisitions[n].head.idx.kspace_encode_step_2 = acquisitions_template[
+                n
+            ].head.idx.kspace_encode_step_2
+            acquisitions[n].head.idx.slice = acquisitions_template[n].head.idx.slice
+            acquisitions[n].head.idx.contrast = acquisitions_template[
+                n
+            ].head.idx.contrast
+            acquisitions[n].head.discard_pre = acquisitions_template[n].head.discard_pre
+            acquisitions[n].head.discard_post = acquisitions_template[
+                n
+            ].head.discard_post
+            acquisitions[n].head.center_sample = acquisitions_template[
+                n
+            ].head.center_sample
+            acquisitions[n].head.encoding_space_ref = acquisitions_template[
+                n
+            ].head.encoding_space_ref
+            acquisitions[n].head.sample_time_us = acquisitions_template[
+                n
+            ].head.sample_time_us
+
+    return acquisitions
 
 
 def read_ismrmrd_acquisition(acq: ismrmrd.Acquisition) -> mrd.Acquisition:
