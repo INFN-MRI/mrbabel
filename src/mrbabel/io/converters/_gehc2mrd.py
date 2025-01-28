@@ -5,6 +5,7 @@ __all__ = [
     "read_gehc_acquisitions",
 ]
 
+import copy
 from types import SimpleNamespace
 
 import numpy as np
@@ -18,12 +19,17 @@ from ._dicom2mrd import read_dicom_header
 
 
 def read_gehc_header(
-    gehc_hdr: dict, 
+    gehc_hdr: dict,
     hdr_template: mrd.Header | None = None,
-    acquisitions_template: list[mrd.Acquisition] | None = None
+    acquisitions_template: list[mrd.Acquisition] | None = None,
 ) -> mrd.Header:
     """Create MRD Header from a GEHC file."""
-    dset = getools.raw2dicom(gehc_hdr, False, hdr_template, acquisitions_template[0])
+    if acquisitions_template is not None:
+        dset = getools.raw2dicom(
+            gehc_hdr, False, hdr_template, acquisitions_template[0]
+        )
+    else:
+        dset = getools.raw2dicom(gehc_hdr, False, hdr_template, None)
     mrd_hdr = read_dicom_header(dset)
 
     # missing info
@@ -78,16 +84,22 @@ def read_gehc_header(
             encoding[-1].encoded_space.field_of_view_mm.y = gehc_hdr["image"]["dfov"]
             encoding[-1].recon_space.field_of_view_mm.x = gehc_hdr["image"]["dfov"]
             encoding[-1].recon_space.field_of_view_mm.y = gehc_hdr["image"]["dfov"]
-            
+
             imode = get_user_param(hdr_template, "mode")
             if imode is None:
                 imode = dset.MRAcquisitionType
             if imode == "3Dnoncart":
-                encoding[-1].encoded_space.field_of_view_mm.z = gehc_hdr["image"]["dfov"]
+                encoding[-1].encoded_space.field_of_view_mm.z = gehc_hdr["image"][
+                    "dfov"
+                ]
                 encoding[-1].recon_space.field_of_view_mm.z = gehc_hdr["image"]["dfov"]
             elif "hybrid" in imode:
-                encoding[-1].encoded_space.field_of_view_mm.z = get_user_param(mrd_hdr, "SliceThickness")
-                encoding[-1].recon_space.field_of_view_mm.z = get_user_param(mrd_hdr, "SliceThickness")
+                encoding[-1].encoded_space.field_of_view_mm.z = get_user_param(
+                    mrd_hdr, "SliceThickness"
+                )
+                encoding[-1].recon_space.field_of_view_mm.z = get_user_param(
+                    mrd_hdr, "SliceThickness"
+                )
             else:
                 nz = gehc_hdr["image"]["slquant"]
                 spacing = get_user_param(mrd_hdr, "SpacingBetweenSlices")
@@ -98,7 +110,7 @@ def read_gehc_header(
                 encoding[-1].encoded_space.matrix_size.z = nz
                 encoding[-1].recon_space.matrix_size.z = nz
         mrd_hdr.encoding = encoding
-        
+
         # replace contrast
         mrd_hdr.sequence_parameters = hdr_template.sequence_parameters
 
@@ -122,7 +134,9 @@ def read_gehc_header(
     return mrd_hdr
 
 
-def read_gehc_acquisitions(gehc_hdr, gehc_raw, hdr_template=None, acquisitions_template=None):
+def read_gehc_acquisitions(
+    gehc_hdr, gehc_raw, hdr_template=None, acquisitions_template=None
+):
     """Create a list of MRD Acquisitions from a list of Siemens Acquisitions."""
     dset = getools.raw2dicom(gehc_hdr, False, hdr_template)
     nacquisitions = len(gehc_raw)
@@ -147,7 +161,7 @@ def read_gehc_acquisitions(gehc_hdr, gehc_raw, hdr_template=None, acquisitions_t
         read_gehc_acquistion(gehc_raw[n], gehc_hdr, commons)
         for n in range(nacquisitions)
     ]
-    
+
     # update
     if acquisitions_template is not None:
         psdname = gehc_hdr["image"]["psd_iname"].strip()
@@ -157,29 +171,31 @@ def read_gehc_acquisitions(gehc_hdr, gehc_raw, hdr_template=None, acquisitions_t
             or "silen" in psdname
             or "burzte" in psdname
         )
-        
+
         # Split echoes along readout
         if get_user_param(hdr_template, "readout_length"):
             data = np.stack([acq.data for acq in acquisitions], axis=0)
-            for n in range(nacquisitions):
-                acquisitions[n].data = None
-            acquisitions = np.asarray(acquisitions)
-                        
+
+            # get actual number of pointes and contrasts
             n_pts = get_user_param(hdr_template, "readout_length")
             n_contrasts = len(np.unique(hdr_template.sequence_parameters.t_e))
-            
-            acquisitions = np.repeat(acquisitions, n_contrasts).tolist()
+
+            for n in range(nacquisitions):
+                acquisitions[n].data = None
+            acquisitions = np.stack(
+                [copy.deepcopy(acquisitions) for n in range(n_contrasts)]
+            ).ravel()
             nacquisitions = len(acquisitions)
-            
+
             data = data[..., :n_pts]
             data = data.reshape(*data.shape[:-1], n_contrasts, -1)
             data = data.swapaxes(1, 2)
             data = data.reshape(-1, *data.shape[-2:])
             data = np.ascontiguousarray(data)
-            
+
             for n in range(nacquisitions):
                 acquisitions[n].data = data[n]
-        
+
         for n in range(nacquisitions):
             acquisitions[n].trajectory = acquisitions_template[n].trajectory
             acquisitions[n].head.flags = acquisitions_template[n].head.flags
@@ -195,9 +211,11 @@ def read_gehc_acquisitions(gehc_hdr, gehc_raw, hdr_template=None, acquisitions_t
             ].head.idx.contrast
             acquisitions[n].head.discard_pre = acquisitions_template[n].head.discard_pre
             if is_fidall:
-                acquisitions[n].head.discard_post = acquisitions[n].samples() - acquisitions_template[
-                    n
-                ].head.discard_post - 1
+                acquisitions[n].head.discard_post = (
+                    acquisitions[n].samples()
+                    - acquisitions_template[n].head.discard_post
+                    - 1
+                )
             else:
                 acquisitions[n].head.discard_post = acquisitions_template[
                     n
@@ -211,6 +229,9 @@ def read_gehc_acquisitions(gehc_hdr, gehc_raw, hdr_template=None, acquisitions_t
             acquisitions[n].head.sample_time_us = acquisitions_template[
                 n
             ].head.sample_time_us
+            acquisitions[n].head.scan_counter = acquisitions_template[
+                n
+            ].head.scan_counter
 
     return acquisitions
 
@@ -255,8 +276,8 @@ def read_gehc_acquistion(gehc_acquisition, gehc_hdr, common) -> mrd.Acquisition:
     encoding_counter.contrast = gehc_acquisition.echoNum
     encoding_counter.user.extend(
         [
-            0,
-            0,
+            gehc_acquisition.opcode,
+            gehc_acquisition.operation,
             0,
             0,
             0,

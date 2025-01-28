@@ -2,7 +2,7 @@
 
 __all__ = []
 
-from ._data_selection  import * # noqa
+from ._data_selection import *  # noqa
 
 from . import _data_selection  # noqa
 

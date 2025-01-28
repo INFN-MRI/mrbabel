@@ -28,7 +28,7 @@ from ._ismrmd2mrd import read_ismrmrd_header
 def read_siemens_header(
     twix_obj: list[dict],
     hdr_template: mrd.Header | None = None,
-    xml_file: str = None, 
+    xml_file: str = None,
     xsl_file: str = None,
 ) -> mrd.Header:
     """Create MRD Header from a Siemens file."""
@@ -62,13 +62,21 @@ def read_siemens_header(
     # update header
     head = headers["image"]
     head.encoding = encodings
+    head.user_parameters.user_parameter_double.append(
+        mrd.UserParameterDoubleType(
+            name="SliceThickness",
+            value=twix_obj[reverse_enc_map["image"]]["hdr"]["Phoenix"]["sSliceArray"][
+                "asSlice"
+            ][0]["dThickness"],
+        )
+    )
     head.user_parameters.user_parameter_base64.append(
         mrd.UserParameterBase64Type(
             name="EncodingMap",
             value=base64.b64encode(json.dumps(enc_map).encode("utf-8")).decode("utf-8"),
         )
     )
-    
+
     # update with blueprint
     if hdr_template is not None:
         # replace encoding
@@ -79,7 +87,7 @@ def read_siemens_header(
 
         # update user parameters
         head.user_parameters.extend(hdr_template.user_parameters)
-    
+
     return head
 
 
@@ -171,7 +179,9 @@ def _read_siemens_header(twix_hdr: dict, xml_file: str, xsl_file: str) -> mrd.He
     return read_ismrmrd_header(ismrmrd_head)
 
 
-def read_siemens_acquisitions(twix_obj, acquisitions_template=None) -> list[mrd.Acquisition]:
+def read_siemens_acquisitions(
+    twix_obj, acquisitions_template=None
+) -> list[mrd.Acquisition]:
     """Create a list of MRD Acquisitions from a list of Siemens Acquisitions."""
     nmeasurements = len(twix_obj)
     acquisitions = []
@@ -188,7 +198,7 @@ def read_siemens_acquisitions(twix_obj, acquisitions_template=None) -> list[mrd.
                 for n in range(nacquisitions)
             ]
         )
-    
+
     # update
     if acquisitions_template is not None:
         for n in range(nacquisitions):

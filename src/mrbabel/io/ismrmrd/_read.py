@@ -62,7 +62,7 @@ def read_ismrmrd(
     acquisitions = read_ismrmrd_acquisitions(acquisitions)
 
     if sort:
-        recon_buffers = sort_kspace(acquisitions, head)
+        recon_buffers, head = sort_kspace(acquisitions, head)
         return recon_buffers, head
 
     return acquisitions, head

@@ -6,6 +6,7 @@ import numpy as np
 
 import mrd
 
+
 def sort_images(images: list[mrd.Image], head: mrd.Header) -> mrd.ImageArray:
     """
     Sort input set of MRD Images into a MRD ImageArray.
@@ -119,4 +120,3 @@ def sort_images(images: list[mrd.Image], head: mrd.Header) -> mrd.ImageArray:
             )
 
     return mrd.ImageArray(data=data, headers=headers.tolist(), meta=meta.tolist())
-

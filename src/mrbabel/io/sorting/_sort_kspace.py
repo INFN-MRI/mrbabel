@@ -2,14 +2,16 @@
 
 __all__ = ["sort_kspace"]
 
+import base64
+import json
+
 import numpy as np
 
 import mrd
 
-from ...utils import get_user_param
 
 def sort_kspace(
-    acquisitions: list[mrd.Acquisition], 
+    acquisitions: list[mrd.Acquisition],
     head: mrd.Header,
 ) -> mrd.ReconBuffer | list[mrd.ReconBuffer]:
     """
@@ -51,6 +53,7 @@ def sort_kspace(
 
     # Loop over encodings
     recon_buffers = []
+    axis_maps = []
     for n in range(n_encoded_spaces):
         data = np.stack([d for d in _data[n]])
         try:
@@ -60,90 +63,115 @@ def sort_kspace(
             trajectory = np.asarray([])
             density = np.asarray([])
         headers = _headers[n]
-        
-        # Get phase idx
-        phase_idx = np.asarray([head.idx.kspace_encode_step_1 for head in headers])
-        
-        # Get slice idx
-        slice_idx_1 = np.asarray([head.idx.slice for head in headers])
-        slice_idx_2 = np.asarray([head.idx.kspace_encode_step_2 for head in headers])
 
-        if len(np.unique(slice_idx_1)) > 1 and len(np.unique(slice_idx_2)) > 1:
+        # Get phase idx
+        enc1_idx = np.asarray([head.idx.kspace_encode_step_1 for head in headers])
+
+        # Get slice idx
+        ndim = 2
+        slice_idx = np.asarray([head.idx.slice for head in headers])
+        enc2_idx = np.asarray([head.idx.kspace_encode_step_2 for head in headers])
+
+        if len(np.unique(slice_idx)) > 1 and len(np.unique(enc2_idx)) > 1:
             raise ValueError("Multislab 3D acquisitions not supported.")
-        slice_idx = slice_idx_2
-        if len(np.unique(slice_idx_1)) > len(np.unique(slice_idx_2)):
-            slice_idx = slice_idx_1
+        if len(np.unique(enc2_idx)) > len(np.unique(slice_idx)):
+            slice_idx = enc2_idx
+            ndim = 3
 
         # Get contrast idx
         contrast_idx = [head.idx.contrast for head in headers]
         contrast_idx = np.asarray([idx if idx else 0 for idx in contrast_idx])
-                                        
+
+        # Get phase/frame (aka, dynamic imaging) idx
+        phase_idx = [head.idx.phase for head in headers]
+        phase_idx = np.asarray([idx if idx else 0 for idx in phase_idx])
+
+        # Get average idx
+        average_idx = [head.idx.average for head in headers]
+        average_idx = np.asarray([idx if idx else 0 for idx in average_idx])
+
         # Get encoding size
-        n_pts = data.shape[-1]
-        n_coils = data.shape[-2]
-        n_phases = len(np.unique(phase_idx))
+        n_channels = data.shape[-2]
+        n_samples = data.shape[-1]
+        n_readouts = len(np.unique(enc1_idx))
         n_slices = len(np.unique(slice_idx))
         n_contrasts = len(np.unique(contrast_idx))
-        
+        n_phases = len(np.unique(phase_idx))
+        n_averages = len(np.unique(average_idx))
+
         # Sort data and trajectory
         buffered_data = np.zeros(
             (
+                n_averages,
+                n_phases,
                 n_contrasts,
                 n_slices,
-                n_phases,
-                n_coils,
-                n_pts,
+                n_readouts,
+                n_channels,
+                n_samples,
             ),
             dtype=np.complex64,
         )
         buffered_headers = np.empty(
             (
+                n_phases,
                 n_contrasts,
                 n_slices,
-                n_phases,
+                n_readouts,
             ),
             dtype=object,
         )
         for idx in range(data.shape[0]):
-            buffered_data[contrast_idx[idx], slice_idx[idx], phase_idx[idx]] = data[idx]
-            buffered_headers[contrast_idx[idx], slice_idx[idx], phase_idx[idx]] = headers[idx]
+            buffered_data[
+                average_idx[idx],
+                phase_idx[idx],
+                contrast_idx[idx],
+                slice_idx[idx],
+                enc1_idx[idx],
+            ] = data[idx]
+            buffered_headers[
+                phase_idx[idx], contrast_idx[idx], slice_idx[idx], enc1_idx[idx]
+            ] = headers[idx]
 
-        # Reshape to (ncoils, n_contrasts, n_slices, n_phases, n_pts)
-        buffered_data = buffered_data.transpose(3, 0, 1, 2, 4)
+        # Reshape to (n_averages, n_channels, n_phases, n_contrasts, n_slices, n_readouts, n_samples)
+        buffered_data = buffered_data.transpose(0, 5, 1, 2, 3, 4, 6)
+        buffered_data = buffered_data.mean(axis=0)  # average data
 
         if trajectory.size > 0:
             n_dims = trajectory.shape[-1]
-            n_pts = trajectory.shape[-2]
+            n_samples = trajectory.shape[-2]
             buffered_trajectory = np.zeros(
                 (
+                    n_phases,
                     n_contrasts,
                     n_slices,
-                    n_phases,
-                    n_pts,
+                    n_readouts,
+                    n_samples,
                     n_dims,
                 ),
                 dtype=np.float32,
             )
             buffered_density = np.zeros(
                 (
+                    n_phases,
                     n_contrasts,
                     n_slices,
-                    n_phases,
-                    n_pts,
+                    n_readouts,
+                    n_samples,
                 ),
                 dtype=np.float32,
             )
             for idx in range(data.shape[0]):
                 buffered_trajectory[
-                    contrast_idx[idx], slice_idx[idx], phase_idx[idx]
+                    phase_idx[idx], contrast_idx[idx], slice_idx[idx], enc1_idx[idx]
                 ] = trajectory[idx]
-                buffered_density[contrast_idx[idx], slice_idx[idx], phase_idx[idx]] = (
-                    density[idx]
-                )
+                buffered_density[
+                    phase_idx[idx], contrast_idx[idx], slice_idx[idx], enc1_idx[idx]
+                ] = density[idx]
         else:
             buffered_trajectory = None
             buffered_density = None
-            
+
         # Prepare sampling description
         sampling = mrd.SamplingDescription()
         sampling.encoded_fov.x = head.encoding[n].encoded_space.field_of_view_mm.x
@@ -162,12 +190,13 @@ def sort_kspace(
         sampling.recon_matrix.y = head.encoding[n].recon_space.matrix_size.y
         sampling.recon_matrix.z = head.encoding[n].recon_space.matrix_size.z
 
-        sampling.sampling_limits.kspace_encoding_step_0.maximum = n_pts
-        sampling.sampling_limits.kspace_encoding_step_0.center = n_pts // 2
-        sampling.sampling_limits.kspace_encoding_step_1.maximum = n_phases
-        sampling.sampling_limits.kspace_encoding_step_1.center = n_phases // 2
-        sampling.sampling_limits.kspace_encoding_step_2.maximum = n_slices
-        sampling.sampling_limits.kspace_encoding_step_2.center = n_slices // 2
+        sampling.sampling_limits.kspace_encoding_step_0.maximum = n_samples
+        sampling.sampling_limits.kspace_encoding_step_0.center = n_samples // 2
+        sampling.sampling_limits.kspace_encoding_step_1.maximum = n_readouts
+        sampling.sampling_limits.kspace_encoding_step_1.center = n_readouts // 2
+        if ndim == 3:
+            sampling.sampling_limits.kspace_encoding_step_2.maximum = n_slices
+            sampling.sampling_limits.kspace_encoding_step_2.center = n_slices // 2
 
         buffer = mrd.ReconBuffer(
             data=np.ascontiguousarray(buffered_data),
@@ -176,9 +205,50 @@ def sort_kspace(
             headers=buffered_headers,
             sampling=sampling,
         )
+
+        # add axis map
+        if ndim == 2:
+            axis_map_keys = [
+                "channel",
+                "phase",
+                "contrast",
+                "slice",
+                "kspace_encoding_step_1",
+                "kspace_encoding_step_0",
+            ]
+        elif ndim == 3:
+            axis_map_keys = [
+                "channel",
+                "phase",
+                "contrast",
+                "kspace_encoding_step_2",
+                "kspace_encoding_step_1",
+                "kspace_encoding_step_0",
+            ]
+        axis_map_keys = np.asarray(axis_map_keys)
+        singleton_axis = np.asarray(buffer.data.shape) == 1
+        axis_map_keys = axis_map_keys[np.logical_not(singleton_axis)].tolist()
+        axis_map_values = np.arange(len(axis_map_keys)).tolist()
+        axis_map = dict(zip(axis_map_keys, axis_map_values))
+        axis_maps.append(axis_map)
+
+        # append buffer
+        buffer.data = buffer.data.squeeze()
+        buffer.headers = buffer.headers.squeeze()
+        if trajectory.size > 0:
+            buffer.trajectory = buffer.trajectory.squeeze()
+            buffer.density = buffer.density.squeeze()
         recon_buffers.append(buffer)
 
     if len(recon_buffers) == 1:
         recon_buffers = recon_buffers[0]
+        axis_maps = axis_maps[0]
 
-    return recon_buffers
+    axis_maps = base64.b64encode(json.dumps(axis_maps).encode("utf-8")).decode("utf-8")
+    if head.user_parameters is None:
+        head.user_parameters = mrd.UserParametersType()
+    head.user_parameters.user_parameter_base64.append(
+        mrd.UserParameterBase64Type(name="AxisMaps", value=axis_maps)
+    )
+
+    return recon_buffers, head

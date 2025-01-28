@@ -9,19 +9,19 @@ from types import SimpleNamespace
 
 class AttrDict(SimpleNamespace):
     """Simple implementation of AttrDict."""
-    
-    def asdict(self): # noqa
+
+    def asdict(self):  # noqa
         return vars(self)
-    
-    def asnamespace(self): # noqa
+
+    def asnamespace(self):  # noqa
         return SimpleNamespace(**vars(self))
-    
+
     @classmethod
-    def fromdict(cls, input): # noqa
+    def fromdict(cls, input):  # noqa
         return cls(**input)
-    
+
     @classmethod
-    def fromnamespace(cls, input): # noqa
+    def fromnamespace(cls, input):  # noqa
         return cls(**vars(input))
 
     def __repr__(self):  # noqa

@@ -6,6 +6,7 @@ import numpy as np
 
 import mrd
 
+
 def unsort_images(image: mrd.ImageArray) -> list[mrd.Image]:
     """
     Unsort input MRD ImageArray into a set of MRD Images.
@@ -47,4 +48,3 @@ def unsort_images(image: mrd.ImageArray) -> list[mrd.Image]:
         images.append(mrd.Image(data=data, head=_headers[n], meta=_meta[n]))
 
     return images
-

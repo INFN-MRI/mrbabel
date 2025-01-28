@@ -6,6 +6,7 @@ import numpy as np
 
 import mrd
 
+
 def unsort_kspace(
     recon_buffers: mrd.ReconBuffer | list[mrd.ReconBuffer],
 ) -> list[mrd.Acquisition]:

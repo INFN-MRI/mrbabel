@@ -72,5 +72,5 @@ def deserialize_array(base64_string: str) -> np.ndarray:
             json_string = json_string.decode("utf-8")
             py_dict = json.loads(json_string)
             return py_dict
-        except Exception:   
+        except Exception:
             return json_string

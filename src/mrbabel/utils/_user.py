@@ -4,6 +4,8 @@ __all__ = ["get_user_param"]
 
 import mrd
 
+from ._serialization import deserialize_array
+
 
 def get_user_param(head: mrd.Header, key: str):
     """
@@ -40,5 +42,5 @@ def get_user_param(head: mrd.Header, key: str):
         if head.user_parameters.user_parameter_base64:
             for item in head.user_parameters.user_parameter_base64:
                 if item.name == key:
-                    return item.value
+                    return deserialize_array(item.value)
     return None

@@ -20,7 +20,7 @@ def read_siemens(
     acquisitions_template: list[mrd.Acquisition] | None = None,
     xml_file: str | None = None,
     xsl_file: str | None = None,
-)  -> tuple[mrd.ReconBuffer | list[mrd.ReconBuffer] | list[mrd.Acquisition], mrd.Header]:
+) -> tuple[mrd.ReconBuffer | list[mrd.ReconBuffer] | list[mrd.Acquisition], mrd.Header]:
     """
     Read input Siemens k-space file.
 
@@ -76,7 +76,7 @@ def read_siemens(
     acquisitions = read_siemens_acquisitions(twix_obj, acquisitions_template)
 
     if sort:
-        recon_buffers = sort_kspace(acquisitions, head)
+        recon_buffers, head = sort_kspace(acquisitions, head)
         return recon_buffers, head
 
     return acquisitions, head

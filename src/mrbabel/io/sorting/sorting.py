@@ -6,6 +6,7 @@ import numpy as np
 
 import mrd
 
+
 def sort_images(images: list[mrd.Image], head: mrd.Header) -> mrd.ImageArray:
     """
     Sort input set of MRD Images into a MRD ImageArray.
@@ -122,7 +123,7 @@ def sort_images(images: list[mrd.Image], head: mrd.Header) -> mrd.ImageArray:
 
 
 def sort_kspace(
-    acquisitions: list[mrd.Acquisition], 
+    acquisitions: list[mrd.Acquisition],
     head: mrd.Header,
     is_ge: bool = False,
 ) -> mrd.ReconBuffer | list[mrd.ReconBuffer]:
@@ -138,7 +139,7 @@ def sort_kspace(
     head : mrd.Header
         MRD Header corresponding to input MRD Acquisitions.
     is_ge: bool
-        GE Acquisition flag - if true, search for 
+        GE Acquisition flag - if true, search for
         operation code in user[0] of encoding counters.
 
     Returns
@@ -177,10 +178,10 @@ def sort_kspace(
             trajectory = np.asarray([])
             density = np.asarray([])
         headers = _headers[n]
-        
+
         # Get phase idx
         phase_idx = np.asarray([head.idx.kspace_encode_step_1 for head in headers])
-        
+
         # Get slice idx
         slice_idx_1 = np.asarray([head.idx.slice for head in headers])
         slice_idx_2 = np.asarray([head.idx.kspace_encode_step_2 for head in headers])
@@ -194,21 +195,21 @@ def sort_kspace(
         # Get contrast idx
         contrast_idx = [head.idx.contrast for head in headers]
         contrast_idx = np.asarray([idx if idx else 0 for idx in contrast_idx])
-        
+
         # Get operation code
         if is_ge:
             op_idx = [head.idx.user[0] for head in headers]
             op_idx = np.asarray(op_idx)
         else:
             op_idx = np.zeros_like(phase_idx)
-            
+
         # Get encoding size
         n_pts = data.shape[-1]
         n_coils = data.shape[-2]
         n_phases = len(np.unique(phase_idx))
         n_slices = len(np.unique(slice_idx))
         n_contrasts = len(np.unique(contrast_idx))
-        
+
         # Sort data and trajectory
         buffered_data = np.zeros(
             (
