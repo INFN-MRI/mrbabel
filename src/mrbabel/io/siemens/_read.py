@@ -2,6 +2,7 @@
 
 __all__ = ["read_siemens"]
 
+import glob
 import warnings
 
 import mrd
@@ -59,7 +60,7 @@ def read_siemens(
 
     """
     if isinstance(path, str) and path.endswith(".dat"):
-        path = [path]
+        path = glob.glob(path)
     else:
         path = get_paths("dat", path)
     if len(path) == 0:

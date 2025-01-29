@@ -54,10 +54,9 @@ def deserialize_array(base64_string: str) -> np.ndarray:
 
     """
     json_string = base64.b64decode(base64_string)
-
+    json_string = json_string.decode("utf-8")
+    array_dict = json.loads(json_string)
     try:
-        json_string = json_string.decode("utf-8")
-        array_dict = json.loads(json_string)
 
         if array_dict.get("signature", "") != SIGNATURE:
             raise ValueError("Not a NDArray")
@@ -69,8 +68,7 @@ def deserialize_array(base64_string: str) -> np.ndarray:
 
     except Exception:
         try:
-            json_string = json_string.decode("utf-8")
-            py_dict = json.loads(json_string)
+            py_dict = json.loads(array_dict)
             return py_dict
         except Exception:
-            return json_string
+            return array_dict

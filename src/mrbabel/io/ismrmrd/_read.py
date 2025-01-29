@@ -2,6 +2,7 @@
 
 __all__ = ["read_ismrmrd"]
 
+import glob
 import warnings
 
 import ismrmrd
@@ -51,7 +52,7 @@ def read_ismrmrd(
 
     """
     if isinstance(path, str) and path.endswith(".h5"):
-        path = [path]
+        path = glob.glob(path)
     else:
         path = get_paths("h5", path)
     if len(path) == 0:

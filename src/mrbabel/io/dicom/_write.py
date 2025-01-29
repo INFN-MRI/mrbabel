@@ -35,7 +35,7 @@ def write_dicom(
         Input MRD ImageHeader to be written.
 
     """
-    images = unsort_images(image)
+    images = unsort_images(image, head)
 
     # Broadcast sequence parameters to ncontrasts
     head = copy.deepcopy(head)

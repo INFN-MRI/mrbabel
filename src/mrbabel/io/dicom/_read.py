@@ -2,6 +2,8 @@
 
 __all__ = ["read_dicom"]
 
+import glob
+
 import pydicom
 import multiprocessing
 

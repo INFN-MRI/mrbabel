@@ -22,6 +22,8 @@ import mrd
 
 from twixtools import quat
 
+from ...utils import get_user_param
+
 from ._ismrmd2mrd import read_ismrmrd_header
 
 
@@ -87,6 +89,29 @@ def read_siemens_header(
 
         # update user parameters
         head.user_parameters.extend(hdr_template.user_parameters)
+
+    # insert number of dimensions
+    if get_user_param(head, "mode") is None:
+        if (
+            twix_obj[reverse_enc_map["image"]]["hdr"]["MeasYaps"]["sKSpace"][
+                "ucDimension"
+            ]
+            == 2
+        ):
+            value = "2D"
+        elif (
+            twix_obj[reverse_enc_map["image"]]["hdr"]["MeasYaps"]["sKSpace"][
+                "ucDimension"
+            ]
+            == 4
+        ):
+            value = "3D"
+        else:
+            value = None
+        if value:
+            head.user_parameters.user_parameter_string.append(
+                mrd.UserParameterStringType(name="mode", value=value)
+            )
 
     return head
 

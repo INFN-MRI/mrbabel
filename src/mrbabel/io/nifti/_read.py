@@ -2,7 +2,7 @@
 
 __all__ = ["read_nifti"]
 
-
+import glob
 import multiprocessing
 
 from multiprocessing.dummy import Pool as ThreadPool
@@ -42,7 +42,7 @@ def read_nifti(
 
     """
     if isinstance(paths, str) and paths.endswith(".nii") or paths.endswith(".nii.gz"):
-        nii_paths = [paths]
+        nii_paths = glob.glob(paths)
     else:
         nii_paths = get_paths("nii", paths, ext2="nii.gz")
     if len(nii_paths) == 0:

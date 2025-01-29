@@ -2,6 +2,7 @@
 
 __all__ = ["read_gehc"]
 
+import glob
 import warnings
 
 import mrd
@@ -59,7 +60,7 @@ def read_gehc(
             "GEHC reader is private - ask for access at https://docs.google.com/forms/d/1BvA1h8qb9GmndqiXMplQbf3IujgBIehQ1psnfmW0tew/edit"
         )
     if isinstance(path, str) and (path.endswith(".h5") or path.endswith(".7")):
-        path = [path]
+        path = glob.glob(path)
     else:
         path = get_paths("h5", path, "7")
     if len(path) == 0:

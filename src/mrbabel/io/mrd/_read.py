@@ -2,6 +2,7 @@
 
 __all__ = ["read_mrd"]
 
+import glob
 import warnings
 
 import mrd
@@ -47,7 +48,7 @@ def read_mrd(
 
     """
     if isinstance(path, str) and path.endswith(".bin"):
-        path = [path]
+        path = glob.glob(path)
     else:
         path = get_paths("bin", path)
     if len(path) == 0:

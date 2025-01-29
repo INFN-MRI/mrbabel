@@ -27,7 +27,7 @@ from ._mrd2dicom import IMTYPE_MAPS
 def nifti2dicom(nii_paths: list[str], nii: list[Nifti1Image]) -> list[pydicom.Dataset]:
     """Convert NIfTI to Dicom dataset."""
     # Get json
-    json_paths = [".".join([path.split(".")[0], "json"]) for path in nii_paths]
+    json_paths = [".".join([*path.split(".")[:-1], "json"]) for path in nii_paths]
     json_list = []
     for json_path in json_paths:
         with open(json_path) as json_file:
