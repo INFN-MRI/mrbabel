@@ -61,7 +61,7 @@ def read_nifti(
     head = _convert_sequence_parameters_units(head)
 
     if sort:
-        image = sort_images(images, head)
+        image, head = sort_images(images, head)
         image.data = np.flip(image.data.swapaxes(-1, -2), (-2, -1))
         return image, head
 

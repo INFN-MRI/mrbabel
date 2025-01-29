@@ -63,7 +63,7 @@ def read_dicom(
     images, head = read_dicom_images(dsets, head)
 
     if sort:
-        image = sort_images(images, head)
+        image, head = sort_images(images, head)
         image.data = np.flip(image.data, -3)
         return image, head
 

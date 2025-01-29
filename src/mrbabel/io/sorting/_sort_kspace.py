@@ -55,6 +55,7 @@ def sort_kspace(
     recon_buffers = []
     axis_maps = []
     for n in range(n_encoded_spaces):
+        ndim = 2
         data = np.stack([d for d in _data[n]])
         try:
             trajectory = np.stack([traj for traj in _trajectory[n]])
@@ -64,13 +65,17 @@ def sort_kspace(
             density = np.asarray([])
         headers = _headers[n]
 
-        # Get phase idx
+        # Get phase encoding idx
         enc1_idx = np.asarray([head.idx.kspace_encode_step_1 for head in headers])
+        enc1_idx = np.asarray([idx if idx else 0 for idx in enc1_idx])
 
         # Get slice idx
-        ndim = 2
         slice_idx = np.asarray([head.idx.slice for head in headers])
+        slice_idx = np.asarray([idx if idx else 0 for idx in slice_idx])
+
+        # Get partition encoding idx
         enc2_idx = np.asarray([head.idx.kspace_encode_step_2 for head in headers])
+        enc2_idx = np.asarray([idx if idx else 0 for idx in enc2_idx])
 
         if len(np.unique(slice_idx)) > 1 and len(np.unique(enc2_idx)) > 1:
             raise ValueError("Multislab 3D acquisitions not supported.")
@@ -82,9 +87,18 @@ def sort_kspace(
         contrast_idx = [head.idx.contrast for head in headers]
         contrast_idx = np.asarray([idx if idx else 0 for idx in contrast_idx])
 
-        # Get phase/frame (aka, dynamic imaging) idx
+        # Get phase (aka, triggered imaging) idx
         phase_idx = [head.idx.phase for head in headers]
         phase_idx = np.asarray([idx if idx else 0 for idx in phase_idx])
+
+        # Get repetition (aka, dynamic imaging) idx
+        repetition_idx = [head.idx.repetition for head in headers]
+        repetition_idx = np.asarray([idx if idx else 0 for idx in repetition_idx])
+
+        if len(np.unique(phase_idx)) > 1 and len(np.unique(repetition_idx)) > 1:
+            raise ValueError("Multiphase dynamic acquisition not supported.")
+        if len(np.unique(repetition_idx)) > len(np.unique(phase_idx)):
+            phase_idx = repetition_idx
 
         # Get average idx
         average_idx = [head.idx.average for head in headers]

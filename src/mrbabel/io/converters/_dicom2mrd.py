@@ -404,9 +404,7 @@ def read_dicom_images(
             pass
 
         # Label data
-        head.image_series_index = unique_series_numbers.tolist().index(
-            dset.SeriesNumber
-        )
+        head.image_series_index = int(dset.SeriesNumber)
         head.image_index = int(dset.get("InstanceNumber", 0))
         head.slice = slice_idx[n]
         # head.phase = trigger_idx[n]

@@ -5,7 +5,9 @@ __all__ = [
     "read_gehc_acquisitions",
 ]
 
+import base64
 import copy
+
 from types import SimpleNamespace
 
 import numpy as np
@@ -65,6 +67,12 @@ def read_gehc_header(
     mrd_hdr.measurement_information.series_instance_uid_root = dset.SeriesInstanceUID[
         :20
     ]
+    mrd_hdr.user_parameters.user_parameter_base64.append(
+        mrd.UserParameterBase64Type(
+            name="DicomJson",
+            value=base64.b64encode(dset.to_json().encode("utf-8")).decode("utf-8"),
+        )
+    )
 
     # update with blueprint
     if hdr_template is not None:
@@ -130,6 +138,12 @@ def read_gehc_header(
             )
         else:
             mrd_hdr.user_parameters = hdr_template.user_parameters
+
+    # insert number of dimensions
+    if get_user_param(mrd_hdr, "mode") is None:
+        mrd_hdr.user_parameters.user_parameter_string.append(
+            mrd.UserParameterStringType(name="mode", value=dset.MRAcquisitionType)
+        )
 
     return mrd_hdr
 
