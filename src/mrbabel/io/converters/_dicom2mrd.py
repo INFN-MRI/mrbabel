@@ -88,7 +88,10 @@ def read_dicom_header(dset: pydicom.Dataset) -> mrd.Header:
         mrdhead.study_information.study_id = dset.StudyID
     except Exception:
         pass
-    mrdhead.study_information.study_description = dset.StudyDescription
+    try:
+        mrdhead.study_information.study_description = dset.StudyDescription
+    except Exception:
+        pass
     mrdhead.study_information.study_instance_uid = dset.StudyInstanceUID
 
     # fill measurement information
@@ -246,7 +249,7 @@ def read_dicom_header(dset: pydicom.Dataset) -> mrd.Header:
 
     mrdhead.user_parameters = mrd.UserParametersType()
 
-    # assign
+    # Slice Thickness and Spacing
     slice_thickness = mrd.UserParameterDoubleType(
         name="SliceThickness", value=slice_thickness
     )
@@ -255,6 +258,12 @@ def read_dicom_header(dset: pydicom.Dataset) -> mrd.Header:
         name="SpacingBetweenSlices", value=slice_spacing
     )
     mrdhead.user_parameters.user_parameter_double.append(slice_spacing)
+
+    # Imaging Mode
+    imode = mrd.UserParameterStringType(
+        name="ImagingMode", value=dset.MRAcquisitionType
+    )
+    mrdhead.user_parameters.user_parameter_string.append(imode)
 
     return mrdhead
 
@@ -357,8 +366,8 @@ def read_dicom_images(
 
         # Fill position and orientation
         head.position = tuple(np.stack(dset.ImagePositionPatient))
-        head.read_dir = tuple(np.stack(dset.ImageOrientationPatient[0:3]))
-        head.phase_dir = tuple(np.stack(dset.ImageOrientationPatient[3:7]))
+        head.line_dir = tuple(np.stack(dset.ImageOrientationPatient[0:3]))
+        head.col_dir = tuple(np.stack(dset.ImageOrientationPatient[3:7]))
         head.slice_dir = tuple(
             np.cross(
                 np.stack(dset.ImageOrientationPatient[0:3]),

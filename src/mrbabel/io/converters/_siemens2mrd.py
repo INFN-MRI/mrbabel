@@ -91,7 +91,7 @@ def read_siemens_header(
         head.user_parameters.extend(hdr_template.user_parameters)
 
     # insert number of dimensions
-    if get_user_param(head, "mode") is None:
+    if get_user_param(head, "ImagingMode") is None:
         if (
             twix_obj[reverse_enc_map["image"]]["hdr"]["MeasYaps"]["sKSpace"][
                 "ucDimension"
@@ -110,7 +110,7 @@ def read_siemens_header(
             value = None
         if value:
             head.user_parameters.user_parameter_string.append(
-                mrd.UserParameterStringType(name="mode", value=value)
+                mrd.UserParameterStringType(name="ImagingMode", value=value)
             )
 
     return head

@@ -98,7 +98,7 @@ def read_fidall(
     enc.encoding_limits.kspace_encoding_step_1.maximum = int(meta.traj.shape[-3]) - 1
     enc.encoding_limits.kspace_encoding_step_1.center = int(meta.traj.shape[-3]) // 2
 
-    if meta.user["mode"] != "3Dnoncart":
+    if meta.user["ImagingMode"] != "3Dnoncart":
         if meta.traj.shape[-1] == 2:
             enc.encoding_limits.slice = mrd.LimitType()
             enc.encoding_limits.slice.maximum = int(enc.encoded_space.matrix_size.z) - 1
@@ -172,7 +172,7 @@ def read_fidall(
     # rf phase
     rf_phase = np.atleast_1d(meta.method.VariablePhase).tolist()
     head.user_parameters.user_parameter_double.append(
-        mrd.UserParameterDoubleType(name="rf_phase", value=rf_phase)
+        mrd.UserParameterDoubleType(name="RFPhase", value=rf_phase)
     )
 
     # create acquisitions
@@ -182,7 +182,7 @@ def read_fidall(
     nslices = enc.encoded_space.matrix_size.z
     ncontrasts = meta.traj.shape[-4]
 
-    if "readout_length" in meta.user:
+    if "ReadoutLength" in meta.user:
         ncontrasts = len(np.unique(meta.method.VariableTE))
         trajectory = np.repeat(meta.traj, ncontrasts, axis=-3)
         dcf = np.repeat(meta.dcf, ncontrasts, axis=-2)
@@ -196,8 +196,8 @@ def read_fidall(
     slice_idx = np.arange(nslices)
     contrast_idx = np.arange(ncontrasts)
 
-    if "separable_mode" in meta.user and meta.user["separable_mode"] > 0:
-        if meta.user["separable_mode"] == 1:
+    if "SeparableMode" in meta.user and meta.user["SeparableMode"] > 0:
+        if meta.user["SeparableMode"] == 1:
             view_idx, slice_idx, contrast_idx = np.broadcast_arrays(
                 view_idx[:, None, None],
                 slice_idx[None, :, None],
@@ -206,7 +206,7 @@ def read_fidall(
             trajectory = trajectory.transpose(2, 0, 1, 3, 4)
             dcf = dcf.transpose(2, 0, 1, 3)
 
-        if meta.user["separable_mode"] == 2:
+        if meta.user["SeparableMode"] == 2:
             view_idx, contrast_idx, slice_idx = np.broadcast_arrays(
                 view_idx[:, None, None],
                 contrast_idx[None, :, None],
@@ -215,7 +215,7 @@ def read_fidall(
             trajectory = trajectory.transpose(2, 1, 0, 3, 4)
             dcf = dcf.transpose(2, 1, 0, 3)
 
-        if meta.user["separable_mode"] == 3:
+        if meta.user["SeparableMode"] == 3:
             slice_idx, contrast_idx, view_idx = np.broadcast_arrays(
                 slice_idx[:, None, None],
                 contrast_idx[None, :, None],
@@ -224,7 +224,7 @@ def read_fidall(
             trajectory = trajectory.transpose(1, 0, 2, 3, 4)
             dcf = dcf.transpose(1, 0, 2, 3)
 
-        if meta.user["separable_mode"] == 4:
+        if meta.user["SeparableMode"] == 4:
             slice_idx, view_idx, contrast_idx = np.broadcast_arrays(
                 slice_idx[:, None, None],
                 view_idx[None, :, None],
@@ -233,14 +233,14 @@ def read_fidall(
             trajectory = trajectory.transpose(1, 2, 0, 3, 4)
             dcf = dcf.transpose(1, 2, 0, 3)
 
-        if meta.user["separable_mode"] == 5:
+        if meta.user["SeparableMode"] == 5:
             contrast_idx, slice_idx, view_idx = np.broadcast_arrays(
                 contrast_idx[:, None, None],
                 slice_idx[None, :, None],
                 view_idx[None, None, :],
             )
 
-        if meta.user["separable_mode"] == 6:
+        if meta.user["SeparableMode"] == 6:
             contrast_idx, view_idx, slice_idx = np.broadcast_arrays(
                 contrast_idx[:, None, None],
                 view_idx[None, :, None],

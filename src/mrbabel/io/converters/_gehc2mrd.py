@@ -93,7 +93,7 @@ def read_gehc_header(
             encoding[-1].recon_space.field_of_view_mm.x = gehc_hdr["image"]["dfov"]
             encoding[-1].recon_space.field_of_view_mm.y = gehc_hdr["image"]["dfov"]
 
-            imode = get_user_param(hdr_template, "mode")
+            imode = get_user_param(hdr_template, "ImagingMode")
             if imode is None:
                 imode = dset.MRAcquisitionType
             if imode == "3Dnoncart":
@@ -140,9 +140,11 @@ def read_gehc_header(
             mrd_hdr.user_parameters = hdr_template.user_parameters
 
     # insert number of dimensions
-    if get_user_param(mrd_hdr, "mode") is None:
+    if get_user_param(mrd_hdr, "ImagingMode") is None:
         mrd_hdr.user_parameters.user_parameter_string.append(
-            mrd.UserParameterStringType(name="mode", value=dset.MRAcquisitionType)
+            mrd.UserParameterStringType(
+                name="ImagingMode", value=dset.MRAcquisitionType
+            )
         )
 
     return mrd_hdr
@@ -187,11 +189,11 @@ def read_gehc_acquisitions(
         )
 
         # Split echoes along readout
-        if get_user_param(hdr_template, "readout_length"):
+        if get_user_param(hdr_template, "ReadoutLength"):
             data = np.stack([acq.data for acq in acquisitions], axis=0)
 
             # get actual number of pointes and contrasts
-            n_pts = get_user_param(hdr_template, "readout_length")
+            n_pts = get_user_param(hdr_template, "ReadoutLength")
             n_contrasts = len(np.unique(hdr_template.sequence_parameters.t_e))
 
             for n in range(nacquisitions):

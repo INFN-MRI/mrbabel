@@ -14,6 +14,8 @@ import mrd
 import numpy as np
 import pydicom
 
+from ...utils import get_user_param
+
 # Defaults for input arguments
 DEFAULTS = {
     "out_group": "dataset",
@@ -241,12 +243,12 @@ def _dump_dicom_image(image, mrdhead):
         head.position[2],
     ]
     dset.ImageOrientationPatient = [
-        head.read_dir[0],
-        head.read_dir[1],
-        head.read_dir[2],
-        head.phase_dir[0],
-        head.phase_dir[1],
-        head.phase_dir[2],
+        head.line_dir[0],
+        head.line_dir[1],
+        head.line_dir[2],
+        head.col_dir[0],
+        head.col_dir[1],
+        head.col_dir[2],
     ]
 
     time_sec = head.acquisition_time_stamp / 1000 / 2.5
@@ -311,6 +313,15 @@ def _dump_dicom_image(image, mrdhead):
     fov_z = mrdhead.encoding[-1].encoded_space.field_of_view_mm.z
     nz = mrdhead.encoding[-1].encoded_space.matrix_size.z
     dset.SpacingBetweenSlices = fov_z / nz
+
+    # setting imaging mode
+    if get_user_param(mrdhead, "ImagingMode"):
+        imode = get_user_param(mrdhead, "ImagingMode")
+        if "3" in imode:
+            imode = "3D"
+        else:
+            imode = "2D"
+        dset.MRAcquisitionType = imode
 
     return dset
 

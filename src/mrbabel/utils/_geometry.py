@@ -14,15 +14,6 @@ import mrd
 
 from ._user import get_user_param
 
-pcs_directions = ["dSag", "dCor", "dTra"]
-
-# p. 418 - pcs to dcs
-pcs_transformations = {
-    "HFS": [[1, 0, 0], [0, -1, 0], [0, 0, -1]],
-    "HFP": [[-1, 0, 0], [0, 1, 0], [0, 0, -1]],
-    "FFS": [[-1, 0, 0], [0, -1, 0], [0, 0, 1]],
-}
-
 
 def get_geometry(
     head: mrd.Header,
@@ -49,54 +40,41 @@ def get_geometry(
 
 # %% local utils
 class Geometry:
-    """
-    Get geometric information from MRD Header.
-
-    During initialization, information about slice geometry is copied from the supplied twix dict.
-    Methods for conversion between the different coordinate systems
-    Patient Coordinate System (PCS; Sag/Cor/Tra), Device Coordinate System (XYZ) and Gradient Coordinate System
-    (GCS or PRS; Phase, Readout, Slice) are implemented (so far only rotation, i.e. won't work for offcenter measurementes).
-
-    Examples
-    --------
-    ```
-    import twixtools
-    twix = twixtools.read_twix('meas.dat', parse_geometry=True, parse_data=False)
-    x = [1,1,1]
-    y = twix[-1]['geometry'].rps_to_xyz() @ x
-    ```
-
-    Based on work from Christian Mirkes and Ali Aghaeifar.
-    """
-
-    def __init__(self, head, raw_or_image_headers):  # noqa
-        self.from_mrd(head, raw_or_image_headers)
+    """Get geometric information from MRD Header."""
 
     def __repr__(self):  # noqa
+        if self.patient_position:
+            pp = "".join(self.patient_position.name.split("_"))
+        else:
+            pp = None
         return (
-            "Geometry:\n"
-            f"  inplane_rot: {self.inplane_rot}\n"
-            f"  normal: {self.normal}\n"
-            f"  offset: {self.offset}\n"
-            f"  patient_position: {self.patient_position}\n"
-            f"  rotmatrix: {self.rotmatrix}\n"
-            f"  voxelsize: {self.voxelsize}"
+            "Geomatry info:\n"
+            f"  inplane_rot: {np.round(self.inplane_rot, 4)}\n"
+            f"  normal: {np.round(self.normal, 4)}\n"
+            f"  offset: {np.round(self.offset, 4)}\n"
+            f"  patient_position: {pp}\n"
+            f"  rotmatrix: {np.round(self.rotmatrix, 4)}\n"
+            f"  voxelsize: {np.round(self.voxelsize, 4)}"
         )
 
     def __str__(self):  # noqa
+        if self.patient_position:
+            pp = "".join(self.patient_position.name.split("_"))
+        else:
+            pp = None
         return (
-            "Geometry:\n"
+            "Geomatry info:\n"
             f"  inplane_rot: {self.inplane_rot}\n"
             f"  normal: {self.normal}\n"
             f"  offset: {self.offset}\n"
-            f"  patient_position: {self.patient_position}\n"
+            f"  patient_position: {pp}\n"
             f"  rotmatrix: {self.rotmatrix}\n"
             f"  voxelsize: {self.voxelsize}"
         )
 
-    def from_mrd(self, head, raw_or_image_headers):  # noqa
-        if get_user_param(head, "mode"):
-            self.dims = int(get_user_param(head, "mode")[0])
+    def __init__(self, head, raw_or_image_headers):  # noqa
+        if get_user_param(head, "ImagingMode"):
+            self.dims = int(get_user_param(head, "ImagingMode")[0])
         else:
             self.dims = None
         self.fov = get_fov(head)
@@ -104,32 +82,51 @@ class Geometry:
         self.voxelsize = self.get_resolution(head)
 
         # get normal
-        orientation = get_image_orientation(raw_or_image_headers)
+        positions = get_image_position(head, raw_or_image_headers)
+        orientation = get_image_orientation(head, raw_or_image_headers)[:, 0].reshape(
+            2, 3
+        )
         self.normal = get_plane_normal(orientation).tolist()
 
         # get position
-        positions = get_position(head, raw_or_image_headers)
         self.offset = positions.mean(axis=-1).tolist()
 
         # get patient position
         self.patient_position = None
         if head.measurement_information:
             if head.measurement_information.patient_position.name is not None:
-                self.patient_position = "".join(
-                    head.measurement_information.patient_position.name.split("_")
-                )
+                self.patient_position = head.measurement_information.patient_position
 
+        # create affine
         affine = make_nifti_affine(self.shape, positions, orientation, self.voxelsize)
-        self.rotmatrix = extract_rotation_from_affine(affine)
-        self.inplane_rot = extract_inplane_rotation(self.rotmatrix)
+
+        # flip fov, shape, res to (x,y,z)
+        self.fov = self.fov[::-1]
         self.shape = self.shape[::-1]
         self.voxelsize = self.voxelsize[::-1]
-        self.fov = self.fov[::-1]
+
+        # get rotation and in-plane rotation angle
+        self.rotmatrix = extract_rotation_from_affine(affine)
+        self.inplane_rot = extract_inplane_rotation(self.rotmatrix)
 
         # reorient affine
         self.affine = affine
+        if self.dims and self.dims == 2:
+            scan_orient = detect_scan_orientation(orientation)
+            # Axial
+            if scan_orient == "ax":
+                self.affine = reorient_affine(self.shape, affine, "RPS")
+            # Coronal
+            if scan_orient == "cor":
+                self.affine = reorient_affine(self.shape, affine, "RSA")
+            # Sagittal
+            if scan_orient == "sag":
+                self.affine = reorient_affine(self.shape, affine, "ASR")
+            self.affine[:2] *= -1
+        if self.dims and self.dims == 3:
+            self.affine = reorient_affine(self.shape, affine, "LPS")
+            self.affine[:2] *= -1
         self.affine[self.affine == 0] = 0.0
-        self.affine = reorient_affine(self.shape, affine, "RAS")
 
     def get_resolution(self, head):
         return _get_resolution(head, self.fov, self.shape)
@@ -138,33 +135,14 @@ class Geometry:
 def get_plane_normal(orientation):  # noqa
     x, y = orientation
     normal = np.cross(x, y)
-    normal[normal == 0] = np.abs(normal[normal == 0])
+    normal = normal.round(7)
+    normal[normal == 0] = 0.0
     return normal
 
 
 def get_relative_slice_position(orientation, position):
     z = get_plane_normal(orientation)
     return z @ position
-
-
-def get_position(head, raw_or_image_headers):
-    axis_map = get_user_param(head, "AxisMaps")
-    if "slice" in axis_map:
-        slice_idx = axis_map["slice"]
-    elif "kspace_encoding_step_2" in axis_map["slice"]:
-        slice_idx = axis_map["kspace_encoding_step_2"]
-    else:
-        slice_idx = None
-
-    # get headers across slice axis
-    if slice_idx:
-        _headers = raw_or_image_headers[..., None].swapaxes(slice_idx, -1)
-        _headers = _headers.reshape(-1, _headers.shape[-1])
-        _headers = _headers[0]
-    else:
-        _headers = raw_or_image_headers.ravel()[0]  # single slice case
-
-    return np.stack([np.asarray(head.position) for head in _headers], axis=1)
 
 
 def get_fov(head):  # noqa
@@ -195,14 +173,50 @@ def _get_resolution(head, fov, shape):  # noqa
     return resolution.tolist()
 
 
-def get_image_orientation(raw_or_image_headers, astuple=False):  # noqa
-    _header = raw_or_image_headers.ravel()[0]
-    F = np.concatenate([_header.read_dir, _header.phase_dir]).reshape(2, 3)
+def get_image_position(head, raw_or_image_headers):
+    axis_map = get_user_param(head, "AxisMaps")
+    if "slice" in axis_map:
+        slice_idx = axis_map["slice"]
+    elif "kspace_encoding_step_2" in axis_map:
+        slice_idx = axis_map["kspace_encoding_step_2"]
+    else:
+        slice_idx = None
 
-    if astuple:
-        F = tuple(F.ravel())
+    # get headers across slice axis
+    if slice_idx is not None:
+        _headers = raw_or_image_headers[..., None].swapaxes(slice_idx, -1)
+        _headers = _headers.reshape(-1, _headers.shape[-1])
+        _headers = _headers[0]
+    else:
+        _headers = [raw_or_image_headers.ravel()[0]]  # single slice case
 
-    return np.around(F, 4)
+    return np.stack([np.asarray(head.position) for head in _headers], axis=1)
+
+
+def get_image_orientation(head, raw_or_image_headers):  # noqa
+    axis_map = get_user_param(head, "AxisMaps")
+    if "slice" in axis_map:
+        slice_idx = axis_map["slice"]
+    elif "kspace_encoding_step_2" in axis_map:
+        slice_idx = axis_map["kspace_encoding_step_2"]
+    else:
+        slice_idx = None
+
+    # get headers across slice axis
+    if slice_idx is not None:
+        _headers = raw_or_image_headers[..., None].swapaxes(slice_idx, -1)
+        _headers = _headers.reshape(-1, _headers.shape[-1])
+        _headers = _headers[0]
+    else:
+        _headers = [raw_or_image_headers.ravel()[0]]  # single slice case
+
+    if "line_dir" in vars(raw_or_image_headers.ravel()[0]):
+        return np.stack(
+            [np.concatenate([head.line_dir, head.col_dir]) for head in _headers], axis=1
+        )
+    return np.stack(
+        [np.concatenate([head.read_dir, head.phase_dir]) for head in _headers], axis=1
+    )
 
 
 def make_nifti_affine(shape, position, orientation, resolution):
@@ -268,9 +282,6 @@ def make_nifti_affine(shape, position, orientation, resolution):
             axis=1,
         )
 
-    # sign of affine matrix
-    # A0[:2, :] *= -1
-
     return A0.astype(np.float32)
 
 
@@ -301,3 +312,41 @@ def reorient_affine(shape, affine, orientation):  # noqa
     tmp = tmp.as_reoriented(transform)
 
     return tmp.affine
+
+
+def detect_scan_orientation(image_orientation_patient):  # noqa
+    row_cosines = np.array(
+        image_orientation_patient[0]
+    )  # Direction cosines of the rows
+    col_cosines = np.array(
+        image_orientation_patient[1]
+    )  # Direction cosines of the columns
+
+    # Calculate the slice normal (cross product of row and column direction cosines)
+    slice_normal = np.cross(row_cosines, col_cosines)
+
+    # Normalize the slice normal to unit vector
+    slice_normal = slice_normal / np.linalg.norm(slice_normal)
+
+    # Check if slice normal is close to one of the principal axes
+    # Axial (slice normal should be along Z)
+    if np.isclose(slice_normal[2], 1) or np.isclose(slice_normal[2], -1):
+        orientation = "ax"
+    # Sagittal (slice normal should be along X)
+    elif np.isclose(slice_normal[0], 1) or np.isclose(slice_normal[0], -1):
+        orientation = "sag"
+    # Coronal (slice normal should be along Y)
+    elif np.isclose(slice_normal[1], 1) or np.isclose(slice_normal[1], -1):
+        orientation = "cor"
+    else:
+        # For oblique slices, compute the angle between the slice normal and each principal axis
+        angles = {
+            "ax": np.abs(slice_normal[2]),
+            "sag": np.abs(slice_normal[0]),
+            "cor": np.abs(slice_normal[1]),
+        }
+        # Find the orientation with the highest alignment (smallest angle)
+        closest_orientation = max(angles, key=angles.get)
+        orientation = closest_orientation
+
+    return orientation

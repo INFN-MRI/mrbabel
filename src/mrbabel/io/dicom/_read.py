@@ -2,8 +2,6 @@
 
 __all__ = ["read_dicom"]
 
-import glob
-
 import pydicom
 import multiprocessing
 
@@ -13,7 +11,7 @@ import numpy as np
 import mrd
 
 from ..._file_search import get_paths
-
+from ...utils import get_user_param
 
 from ..converters._dicom2mrd import read_dicom_header, read_dicom_images
 from ..sorting import sort_images
@@ -66,7 +64,10 @@ def read_dicom(
 
     if sort:
         image, head = sort_images(images, head)
-        image.data = np.flip(image.data, -3)
+        axis_map = get_user_param(head, "AxisMaps")
+        if "slice" in axis_map:
+            slice_idx = axis_map["slice"]
+            image.data = np.flip(image.data, slice_idx)
         return image, head
 
     return images, head
