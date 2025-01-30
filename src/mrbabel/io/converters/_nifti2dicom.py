@@ -21,6 +21,9 @@ from nii2dcm.dcm_writer import (
 )
 from pydicom.datadict import keyword_for_tag
 
+from ...utils._geometry import detect_scan_orientation
+from ...utils._geometry import reorient_nifti
+
 from ._mrd2dicom import IMTYPE_MAPS
 
 
@@ -65,7 +68,43 @@ def nifti2dicom(nii_paths: list[str], nii: list[Nifti1Image]) -> list[pydicom.Da
     dsets = []
     instance_idx = 0
     for idx in range(len(nii)):
+        try:
+            nii[idx].affine[:2] *= -1
+            ndims = int(json_list[idx]["MRAcquisitionType"][0])
+            iop = np.asarray(json_list[idx]["ImageOrientationPatientDICOM"]).reshape(
+                2, 3
+            )
+            scan_orient = detect_scan_orientation(iop)
+            if ndims == 2:
+                if scan_orient == "ax":
+                    nii[idx] = reorient_nifti(nii[idx], "RAS")
+                if scan_orient == "cor":  # not sure here
+                    nii[idx] = reorient_nifti(nii[idx], "RIA")
+                if scan_orient == "sag":
+                    nii[idx] = reorient_nifti(nii[idx], "AIL")
+            if ndims == 3:
+                if scan_orient == "ax":
+                    nii[idx] = reorient_nifti(nii[idx], "RAI")
+                if scan_orient == "cor":
+                    nii[idx] = reorient_nifti(nii[idx], "RIP")
+                if scan_orient == "sag":
+                    nii[idx] = reorient_nifti(nii[idx], "AIR")
+
+        except Exception:
+            pass
+
         nii2dcm_parameters = nii2dcm.nii.Nifti.get_nii2dcm_parameters(nii[idx])
+
+        # fix wrong nii2dcm iop
+        iop = -1 * np.asarray(nii2dcm_parameters["ImageOrientationPatient"]).reshape(
+            2, 3
+        )
+        iop = np.flip(iop, axis=0).ravel()
+        nii2dcm_parameters["ImageOrientationPatient"] = iop.tolist()
+
+        # fix wrong nii2dcm ipp (TODO: open PR and fix)
+        nii2dcm_parameters = calc_ipp(nii[idx], nii2dcm_parameters)
+
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             dicom = nii2dcm.dcm.DicomMRI("nii2dcm_dicom_mri.dcm")
@@ -102,3 +141,24 @@ def nifti2dicom(nii_paths: list[str], nii: list[Nifti1Image]) -> list[pydicom.Da
                 instance_idx += 1
 
     return dsets
+
+
+def fnT1N(A, N):
+    # Subfn: calculate T1N vector
+    # A = affine matrix [4x4]
+    # N = slice number (counting from 0)
+    T1N = A.dot([0, 0, N, 1])
+    return T1N
+
+
+def calc_ipp(nib_nii, nii2dcm_parameters):
+    A = nib_nii.affine
+    image_pos_patient_array = nii2dcm_parameters["ImagePositionPatient"]
+    nInstances = len(image_pos_patient_array)
+
+    for iInstance in range(0, nInstances):
+        T1N = fnT1N(A, iInstance)
+        image_pos_patient_array[iInstance] = [T1N[0], T1N[1], T1N[2]]
+
+    nii2dcm_parameters["ImagePositionPatient"] = image_pos_patient_array
+    return nii2dcm_parameters

@@ -115,16 +115,16 @@ class Geometry:
             scan_orient = detect_scan_orientation(orientation)
             # Axial
             if scan_orient == "ax":
-                self.affine = reorient_affine(self.shape, affine, "RPS")
+                self.affine = reorient_affine(affine, self.shape, "RPS")
             # Coronal
             if scan_orient == "cor":
-                self.affine = reorient_affine(self.shape, affine, "RSA")
+                self.affine = reorient_affine(affine, self.shape, "RSA")
             # Sagittal
             if scan_orient == "sag":
-                self.affine = reorient_affine(self.shape, affine, "ASR")
+                self.affine = reorient_affine(affine, self.shape, "ASR")
             self.affine[:2] *= -1
         if self.dims and self.dims == 3:
-            self.affine = reorient_affine(self.shape, affine, "LPS")
+            self.affine = reorient_affine(affine, self.shape, "LPS")
             self.affine[:2] *= -1
         self.affine[self.affine == 0] = 0.0
 
@@ -287,7 +287,6 @@ def make_nifti_affine(shape, position, orientation, resolution):
 
 def extract_rotation_from_affine(A):  # noqa
     R = A[:3, :3]
-    # R[:2, :] *= -1
     U, _, Vt = np.linalg.svd(R)
     return U @ Vt
 
@@ -296,22 +295,24 @@ def extract_inplane_rotation(R):  # noqa
     return np.arctan2(R[1, 0], R[0, 0])
 
 
-def reorient_affine(shape, affine, orientation):  # noqa
+def reorient_affine(affine, shape, orientation):  # noqa
+    tmp = np.ones(shape[-3:], dtype=np.float32)
+    tmp = nib.Nifti1Image(tmp, affine)
+    tmp = reorient_nifti(tmp, orientation)
+
+    return tmp.affine
+
+
+def reorient_nifti(input, orientation):
     # get input orientation
-    orig_ornt = nib.io_orientation(affine)
+    orig_ornt = nib.io_orientation(input.affine)
 
     # get target orientation
     targ_ornt = axcodes2ornt(orientation)
 
     # estimate transform
     transform = ornt_transform(orig_ornt, targ_ornt)
-
-    # reorient
-    tmp = np.ones(shape[-3:], dtype=np.float32)
-    tmp = nib.Nifti1Image(tmp, affine)
-    tmp = tmp.as_reoriented(transform)
-
-    return tmp.affine
+    return input.as_reoriented(transform)
 
 
 def detect_scan_orientation(image_orientation_patient):  # noqa
