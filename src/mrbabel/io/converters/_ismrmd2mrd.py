@@ -14,59 +14,70 @@ import mrd
 
 
 def read_ismrmrd_header(
-    hdr: ismrmrd.xsd.ismrmrdschema.ismrmrd.ismrmrdHeader,
-    hdr_template: mrd.Header | None = None,
+    ismrmrd_head: ismrmrd.xsd.ismrmrdschema.ismrmrd.ismrmrdHeader,
+    head_template: mrd.Header | None = None,
 ) -> mrd.Header:
     """Create MRD Header from a ISMRMRD Header."""
-    h = mrd.Header()
+    head = mrd.Header()
 
-    if hasattr(hdr, "version") and hdr.version:
-        h.version = hdr.version
-    if hasattr(hdr, "subjectInformation") and hdr.subjectInformation:
-        h.subject_information = convert_subject_information(hdr.subjectInformation)
-    if hasattr(hdr, "studyInformation") and hdr.studyInformation:
-        h.study_information = convert_study_information(hdr.studyInformation)
-    if hasattr(hdr, "measurementInformation") and hdr.measurementInformation:
-        h.measurement_information = convert_measurement_information(
-            hdr.measurementInformation
+    if hasattr(ismrmrd_head, "version") and ismrmrd_head.version:
+        head.version = ismrmrd_head.version
+    if hasattr(ismrmrd_head, "subjectInformation") and ismrmrd_head.subjectInformation:
+        head.subject_information = convert_subject_information(
+            ismrmrd_head.subjectInformation
+        )
+    if hasattr(ismrmrd_head, "studyInformation") and ismrmrd_head.studyInformation:
+        head.study_information = convert_study_information(
+            ismrmrd_head.studyInformation
         )
     if (
-        hasattr(hdr, "acquisitionSystemInformation")
-        and hdr.acquisitionSystemInformation
+        hasattr(ismrmrd_head, "measurementInformation")
+        and ismrmrd_head.measurementInformation
     ):
-        h.acquisition_system_information = convert_acquisition_system_information(
-            hdr.acquisitionSystemInformation
+        head.measurement_information = convert_measurement_information(
+            ismrmrd_head.measurementInformation
+        )
+    if (
+        hasattr(ismrmrd_head, "acquisitionSystemInformation")
+        and ismrmrd_head.acquisitionSystemInformation
+    ):
+        head.acquisition_system_information = convert_acquisition_system_information(
+            ismrmrd_head.acquisitionSystemInformation
         )
 
-    h.experimental_conditions = convert_experimental_conditions(
-        hdr.experimentalConditions
+    head.experimental_conditions = convert_experimental_conditions(
+        ismrmrd_head.experimentalConditions
     )
 
-    if hasattr(hdr, "encoding") and len(hdr.encoding) > 0:
-        h.encoding = [convert_encoding(e) for e in hdr.encoding]
+    if hasattr(ismrmrd_head, "encoding") and len(ismrmrd_head.encoding) > 0:
+        head.encoding = [head(e) for e in ismrmrd_head.encoding]
     else:
         raise RuntimeError("No encoding found in ISMRMRD header")
 
-    if hasattr(hdr, "sequenceParameters") and hdr.sequenceParameters:
-        h.sequence_parameters = convert_sequence_parameters(hdr.sequenceParameters)
+    if hasattr(ismrmrd_head, "sequenceParameters") and ismrmrd_head.sequenceParameters:
+        head.sequence_parameters = convert_sequence_parameters(
+            ismrmrd_head.sequenceParameters
+        )
 
-    if hasattr(hdr, "userParameters") and hdr.userParameters:
-        h.user_parameters = convert_user_parameters(hdr.userParameters)
+    if hasattr(ismrmrd_head, "userParameters") and ismrmrd_head.userParameters:
+        head.user_parameters = convert_user_parameters(ismrmrd_head.userParameters)
 
-    h.waveform_information = [read_ismrmrd_waveform(w) for w in hdr.waveformInformation]
+    head.waveform_information = [
+        read_ismrmrd_waveform(w) for w in ismrmrd_head.waveformInformation
+    ]
 
     # update with blueprint
-    if hdr_template is not None:
+    if head_template is not None:
         # replace encoding
-        h.encoding = hdr_template.encoding
+        head.encoding = head_template.encoding
 
         # replace contrast
-        h.sequence_parameters = hdr_template.sequence_parameters
+        head.sequence_parameters = head_template.sequence_parameters
 
         # update user parameters
-        h.user_parameters.extend(hdr_template.user_parameters)
+        head.user_parameters.extend(head_template.user_parameters)
 
-    return h
+    return head
 
 
 def read_ismrmrd_acquisitions(
@@ -77,8 +88,8 @@ def read_ismrmrd_acquisitions(
 
     # update
     if acquisitions_template is not None:
-        nacquisitions = len(acquisitions)
-        for n in range(nacquisitions):
+        n_acquisitions = len(acquisitions)
+        for n in range(n_acquisitions):
             acquisitions[n].head.flags = acquisitions_template[n].head.flags
             acquisitions[n].head.idx.kspace_encode_step_1 = acquisitions_template[
                 n
@@ -167,7 +178,7 @@ def string_to_date(date_str: str) -> timedelta:
 
 
 def time_to_string(time_str: str) -> timedelta:
-    time_obj = datetime.strptime(time_str, "%H:%M:%S").time()
+    time_obj = datetime.strptime(time_str, "%head:%M:%S").time()
     total_seconds = time_obj.hour * 3600 + time_obj.minute * 60 + time_obj.second
     return timedelta(seconds=total_seconds)
 
@@ -181,7 +192,7 @@ def date_from_string(s):
 
 def time_from_string(s):
     try:
-        return datetime.strptime(s, "%H:%M:%S").time()
+        return datetime.strptime(s, "%head:%M:%S").time()
     except ValueError:
         raise ValueError("Invalid time format")
 

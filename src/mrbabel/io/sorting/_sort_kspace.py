@@ -9,6 +9,8 @@ import numpy as np
 
 import mrd
 
+from ...utils import get_user_param
+
 
 def sort_kspace(
     acquisitions: list[mrd.Acquisition],
@@ -55,7 +57,6 @@ def sort_kspace(
     recon_buffers = []
     axis_maps = []
     for n in range(n_encoded_spaces):
-        ndim = 2
         data = np.stack([d for d in _data[n]])
         try:
             trajectory = np.stack([traj for traj in _trajectory[n]])
@@ -64,6 +65,12 @@ def sort_kspace(
             trajectory = np.asarray([])
             density = np.asarray([])
         headers = _headers[n]
+
+        # Get number of dimensions
+        if trajectory.size > 0:
+            n_dims = trajectory.shape[-1]
+        else:
+            n_dims = get_user_param(head, "ImagingMode", 2)
 
         # Get phase encoding idx
         enc1_idx = np.asarray([head.idx.kspace_encode_step_1 for head in headers])
@@ -81,7 +88,7 @@ def sort_kspace(
             raise ValueError("Multislab 3D acquisitions not supported.")
         if len(np.unique(enc2_idx)) > len(np.unique(slice_idx)):
             slice_idx = enc2_idx
-            ndim = 3
+            n_dims = 3
 
         # Get contrast idx
         contrast_idx = [head.idx.contrast for head in headers]
@@ -208,7 +215,7 @@ def sort_kspace(
         sampling.sampling_limits.kspace_encoding_step_0.center = n_samples // 2
         sampling.sampling_limits.kspace_encoding_step_1.maximum = n_readouts
         sampling.sampling_limits.kspace_encoding_step_1.center = n_readouts // 2
-        if ndim == 3:
+        if n_dims == 3:
             sampling.sampling_limits.kspace_encoding_step_2.maximum = n_slices
             sampling.sampling_limits.kspace_encoding_step_2.center = n_slices // 2
 
@@ -220,8 +227,8 @@ def sort_kspace(
             sampling=sampling,
         )
 
-        # add axis map
-        if ndim == 2:
+        # Add axis map
+        if n_dims == 2:
             axis_map_keys = [
                 "channel",
                 "phase",
@@ -230,7 +237,7 @@ def sort_kspace(
                 "kspace_encoding_step_1",
                 "kspace_encoding_step_0",
             ]
-        elif ndim == 3:
+        elif n_dims == 3:
             axis_map_keys = [
                 "channel",
                 "phase",
@@ -246,7 +253,7 @@ def sort_kspace(
         axis_map = dict(zip(axis_map_keys, axis_map_values))
         axis_maps.append(axis_map)
 
-        # append buffer
+        # Append buffer
         buffer.data = buffer.data.squeeze()
         buffer.headers = buffer.headers.squeeze()
         if trajectory.size > 0:
@@ -258,6 +265,7 @@ def sort_kspace(
         recon_buffers = recon_buffers[0]
         axis_maps = axis_maps[0]
 
+    # Save axis map
     axis_maps = base64.b64encode(json.dumps(axis_maps).encode("utf-8")).decode("utf-8")
     if head.user_parameters is None:
         head.user_parameters = mrd.UserParametersType()

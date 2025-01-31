@@ -148,7 +148,7 @@ def sort_images(images: list[mrd.Image], head: mrd.Header) -> mrd.ImageArray:
                 np.fft.fftshift(np.fft.fft(data, axis=-3), axes=-3), axis=-3
             )
 
-    # add axis map
+    # Add axis map
     axis_map_keys = ["phase", "contrast", "slice", "rows", "columns"]
     axis_map_keys = np.asarray(axis_map_keys)
     singleton_axis = np.asarray(data.shape) == 1

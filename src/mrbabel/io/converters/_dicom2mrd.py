@@ -57,99 +57,99 @@ def _convert_patient_position(PatientPosition):
 
 def read_dicom_header(dset: pydicom.Dataset) -> mrd.Header:
     """Create MRD Header from a DICOM file."""
-    mrdhead = mrd.Header(version=2.0)
+    head = mrd.Header(version=2.0)
 
     # fill patient information
-    mrdhead.subject_information = mrd.SubjectInformationType()
+    head.subject_information = mrd.SubjectInformationType()
     try:
-        mrdhead.subject_information.patient_name = dset.PatientName
+        head.subject_information.patient_name = dset.PatientName
     except Exception:
         pass
-    mrdhead.subject_information.patient_weight_kg = dset.PatientWeight
+    head.subject_information.patient_weight_kg = dset.PatientWeight
     try:
-        mrdhead.subject_information.patient_height_m = dset.PatientHeight
+        head.subject_information.patient_height_m = dset.PatientHeight
     except Exception:
         pass
-    mrdhead.subject_information.patient_id = dset.PatientID
+    head.subject_information.patient_id = dset.PatientID
     try:
-        mrdhead.subject_information.patient_birthdate = dset.PatientBirthDate
+        head.subject_information.patient_birthdate = dset.PatientBirthDate
     except Exception:
         pass
     try:
-        mrdhead.subject_information.patient_gender = mrd.PatientGender[dset.PatientSex]
+        head.subject_information.patient_gender = mrd.PatientGender[dset.PatientSex]
     except Exception:
-        mrdhead.subject_information.patient_gender = mrd.PatientGender["O"]
+        head.subject_information.patient_gender = mrd.PatientGender["O"]
 
     # fill study information
-    mrdhead.study_information = mrd.StudyInformationType()
-    mrdhead.study_information.study_date = dset.StudyDate
-    mrdhead.study_information.study_time = dset.StudyTime
+    head.study_information = mrd.StudyInformationType()
+    head.study_information.study_date = dset.StudyDate
+    head.study_information.study_time = dset.StudyTime
     try:
-        mrdhead.study_information.study_id = dset.StudyID
+        head.study_information.study_id = dset.StudyID
     except Exception:
         pass
     try:
-        mrdhead.study_information.study_description = dset.StudyDescription
+        head.study_information.study_description = dset.StudyDescription
     except Exception:
         pass
-    mrdhead.study_information.study_instance_uid = dset.StudyInstanceUID
+    head.study_information.study_instance_uid = dset.StudyInstanceUID
 
     # fill measurement information
-    mrdhead.measurement_information = mrd.MeasurementInformationType()
-    mrdhead.measurement_information.measurement_id = dset.SeriesInstanceUID
-    mrdhead.measurement_information.patient_position = _convert_patient_position(
+    head.measurement_information = mrd.MeasurementInformationType()
+    head.measurement_information.measurement_id = dset.SeriesInstanceUID
+    head.measurement_information.patient_position = _convert_patient_position(
         dset.PatientPosition
     )
     try:
-        mrdhead.measurement_information.protocol_name = dset.ProtocolName
+        head.measurement_information.protocol_name = dset.ProtocolName
     except Exception:
         pass
     try:
-        mrdhead.measurement_information.series_description = dset.SeriesDescription
+        head.measurement_information.series_description = dset.SeriesDescription
     except Exception:
         pass
     try:
-        mrdhead.measurement_information.series_date = dset.SeriesDate
+        head.measurement_information.series_date = dset.SeriesDate
     except Exception:
         pass
     try:
-        mrdhead.measurement_information.series_time = dset.SeriesTime
+        head.measurement_information.series_time = dset.SeriesTime
     except Exception:
         pass
     try:
-        mrdhead.measurement_information.initial_series_number = dset.SeriesNumber
+        head.measurement_information.initial_series_number = dset.SeriesNumber
     except Exception:
         pass
-    mrdhead.measurement_information.frame_of_reference_uid = dset.FrameOfReferenceUID
+    head.measurement_information.frame_of_reference_uid = dset.FrameOfReferenceUID
 
     # fill acquisition system information
-    mrdhead.acquisition_system_information = mrd.AcquisitionSystemInformationType()
-    mrdhead.acquisition_system_information.system_vendor = dset.Manufacturer
-    mrdhead.acquisition_system_information.system_model = dset.ManufacturerModelName
-    mrdhead.acquisition_system_information.system_field_strength_t = float(
+    head.acquisition_system_information = mrd.AcquisitionSystemInformationType()
+    head.acquisition_system_information.system_vendor = dset.Manufacturer
+    head.acquisition_system_information.system_model = dset.ManufacturerModelName
+    head.acquisition_system_information.system_field_strength_t = float(
         dset.MagneticFieldStrength
     )
     try:
-        mrdhead.acquisition_system_information.institution_name = dset.InstitutionName
+        head.acquisition_system_information.institution_name = dset.InstitutionName
     except Exception:
-        mrdhead.acquisition_system_information.institution_name = "Virtual"
+        head.acquisition_system_information.institution_name = "Virtual"
     try:
-        mrdhead.acquisition_system_information.station_name = dset.StationName
+        head.acquisition_system_information.station_name = dset.StationName
     except Exception:
         pass
 
     # fill experimental condition
-    mrdhead.experimental_conditions.h1resonance_frequency_hz = int(
+    head.experimental_conditions.h1resonance_frequency_hz = int(
         dset.MagneticFieldStrength * 4258e4
     )
 
     # fill encoding space
-    enc = mrd.EncodingType()
-    enc.trajectory = mrd.Trajectory.CARTESIAN
-    enc.encoded_space.matrix_size.x = dset.Columns
-    enc.encoded_space.matrix_size.y = dset.Rows
-    enc.encoded_space.matrix_size.z = 1
-    enc.encoded_space.field_of_view_mm = mrd.FieldOfViewMm()
+    encoding = mrd.EncodingType()
+    encoding.trajectory = mrd.Trajectory.CARTESIAN
+    encoding.encoded_space.matrix_size.x = dset.Columns
+    encoding.encoded_space.matrix_size.y = dset.Rows
+    encoding.encoded_space.matrix_size.z = 1
+    encoding.encoded_space.field_of_view_mm = mrd.FieldOfViewMm()
 
     if (
         hasattr(dset, "SOPClassUID")
@@ -174,19 +174,19 @@ def read_dicom_header(dset: pydicom.Dataset) -> mrd.Header:
             )
             slice_spacing = slice_thickness
 
-        enc.encoded_space.field_of_view_mm.x = (
+        encoding.encoded_space.field_of_view_mm.x = (
             dset.PerFrameFunctionalGroupsSequence[0]
             .PixelMeasuresSequence[0]
             .PixelSpacing[0]
             * dset.Rows
         )
-        enc.encoded_space.field_of_view_mm.y = (
+        encoding.encoded_space.field_of_view_mm.y = (
             dset.PerFrameFunctionalGroupsSequence[0]
             .PixelMeasuresSequence[0]
             .PixelSpacing[1]
             * dset.Columns
         )
-        enc.encoded_space.field_of_view_mm.z = float(slice_spacing)
+        encoding.encoded_space.field_of_view_mm.z = float(slice_spacing)
     else:
         slice_thickness = float(dset["SliceThickness"].value)
         if "SpacingBetweenSlices" in dset:
@@ -199,77 +199,77 @@ def read_dicom_header(dset: pydicom.Dataset) -> mrd.Header:
             )
             slice_spacing = slice_thickness
 
-        enc.encoded_space.field_of_view_mm.x = dset.PixelSpacing[0] * dset.Rows
-        enc.encoded_space.field_of_view_mm.y = dset.PixelSpacing[1] * dset.Columns
-        enc.encoded_space.field_of_view_mm.z = slice_spacing
+        encoding.encoded_space.field_of_view_mm.x = dset.PixelSpacing[0] * dset.Rows
+        encoding.encoded_space.field_of_view_mm.y = dset.PixelSpacing[1] * dset.Columns
+        encoding.encoded_space.field_of_view_mm.z = slice_spacing
 
     # fill recon space
-    enc.recon_space = copy.deepcopy(enc.encoded_space)
+    encoding.recon_space = copy.deepcopy(encoding.encoded_space)
 
     # fill encoding limit
-    enc.encoding_limits.kspace_encoding_step_0 = mrd.LimitType()
-    enc.encoding_limits.kspace_encoding_step_0.maximum = int(dset.Columns) - 1
-    enc.encoding_limits.kspace_encoding_step_0.center = int(dset.Columns) // 2
+    encoding.encoding_limits.kspace_encoding_step_0 = mrd.LimitType()
+    encoding.encoding_limits.kspace_encoding_step_0.maximum = int(dset.Columns) - 1
+    encoding.encoding_limits.kspace_encoding_step_0.center = int(dset.Columns) // 2
 
-    enc.encoding_limits.kspace_encoding_step_1 = mrd.LimitType()
-    enc.encoding_limits.kspace_encoding_step_1.maximum = int(dset.Rows) - 1
-    enc.encoding_limits.kspace_encoding_step_1.center = int(dset.Rows) // 2
+    encoding.encoding_limits.kspace_encoding_step_1 = mrd.LimitType()
+    encoding.encoding_limits.kspace_encoding_step_1.maximum = int(dset.Rows) - 1
+    encoding.encoding_limits.kspace_encoding_step_1.center = int(dset.Rows) // 2
 
-    enc.encoding_limits.slice = mrd.LimitType()
-    enc.encoding_limits.contrast = mrd.LimitType()
+    encoding.encoding_limits.slice = mrd.LimitType()
+    encoding.encoding_limits.contrast = mrd.LimitType()
 
-    enc.parallel_imaging = mrd.ParallelImagingType()
+    encoding.parallel_imaging = mrd.ParallelImagingType()
     if (
         hasattr(dset, "SOPClassUID")
         and dset.SOPClassUID.name == "Enhanced MR Image Storage"
     ):
-        enc.parallel_imaging.acceleration_factor.kspace_encoding_step_1 = (
+        encoding.parallel_imaging.acceleration_factor.kspace_encoding_step_1 = (
             dset.SharedFunctionalGroupsSequence[0]
             .MRModifierSequence[0]
             .ParallelReductionFactorInPlane
         )
-        enc.parallel_imaging.acceleration_factor.kspace_encoding_step_2 = (
+        encoding.parallel_imaging.acceleration_factor.kspace_encoding_step_2 = (
             dset.SharedFunctionalGroupsSequence[0]
             .MRModifierSequence[0]
             .ParallelReductionFactorOutOfPlane
         )
     else:
-        enc.parallel_imaging.acceleration_factor.kspace_encoding_step_1 = 1
-        enc.parallel_imaging.acceleration_factor.kspace_encoding_step_2 = 1
+        encoding.parallel_imaging.acceleration_factor.kspace_encoding_step_1 = 1
+        encoding.parallel_imaging.acceleration_factor.kspace_encoding_step_2 = 1
 
-    mrdhead.encoding.append(enc)
-    mrdhead.sequence_parameters = mrd.SequenceParametersType()
-    mrdhead.sequence_parameters.flip_angle_deg = [float(dset.FlipAngle)]
-    mrdhead.sequence_parameters.t_r = [float(dset.RepetitionTime)]
-    mrdhead.sequence_parameters.t_e = [float(dset.EchoTime)]
+    head.encoding.append(encoding)
+    head.sequence_parameters = mrd.SequenceParametersType()
+    head.sequence_parameters.flip_angle_deg = [float(dset.FlipAngle)]
+    head.sequence_parameters.t_r = [float(dset.RepetitionTime)]
+    head.sequence_parameters.t_e = [float(dset.EchoTime)]
     try:
-        mrdhead.sequence_parameters.t_i = [float(dset.InversionTime)]
+        head.sequence_parameters.t_i = [float(dset.InversionTime)]
     except Exception:
         pass
 
-    mrdhead.user_parameters = mrd.UserParametersType()
+    head.user_parameters = mrd.UserParametersType()
 
     # Slice Thickness and Spacing
     slice_thickness = mrd.UserParameterDoubleType(
         name="SliceThickness", value=slice_thickness
     )
-    mrdhead.user_parameters.user_parameter_double.append(slice_thickness)
+    head.user_parameters.user_parameter_double.append(slice_thickness)
     slice_spacing = mrd.UserParameterDoubleType(
         name="SpacingBetweenSlices", value=slice_spacing
     )
-    mrdhead.user_parameters.user_parameter_double.append(slice_spacing)
+    head.user_parameters.user_parameter_double.append(slice_spacing)
 
     # Imaging Mode
     imode = mrd.UserParameterStringType(
         name="ImagingMode", value=dset.MRAcquisitionType
     )
-    mrdhead.user_parameters.user_parameter_string.append(imode)
+    head.user_parameters.user_parameter_string.append(imode)
 
-    return mrdhead
+    return head
 
 
 def read_dicom_images(
-    dsets: list[pydicom.Dataset], mrdhead: mrd.Header
+    dsets: list[pydicom.Dataset], head: mrd.Header
 ) -> list[mrd.Acquisition]:
     """Create list of MRD Acquisitions from a DICOM file."""
     images = []
@@ -284,7 +284,7 @@ def read_dicom_images(
     dsets = sorted(dsets, key=get_instance_number)
 
     # Build a list of unique Instance Numbers
-    unique_series_numbers = np.unique([int(dset.SeriesNumber) for dset in dsets])
+    # unique_series_numbers = np.unique([int(dset.SeriesNumber) for dset in dsets])
 
     # Build a list of unique SliceLocation for slice counter
     unique_slice_locations, slice_idx = _get_unique_slice_locations(dsets)
@@ -312,19 +312,19 @@ def read_dicom_images(
 
     # Get unique contrast and indexes and update mrd header
     unique_contrasts, contrast_idx = _get_unique_contrasts(contrasts)
-    mrdhead.sequence_parameters.flip_angle_deg = np.unique(unique_contrasts[3])
-    mrdhead.sequence_parameters.t_r = np.unique(unique_contrasts[2])
-    mrdhead.sequence_parameters.t_e = np.unique(unique_contrasts[1])
+    head.sequence_parameters.flip_angle_deg = np.unique(unique_contrasts[3])
+    head.sequence_parameters.t_r = np.unique(unique_contrasts[2])
+    head.sequence_parameters.t_e = np.unique(unique_contrasts[1])
     if "InversionTime" in dsets[0]:
-        mrdhead.sequence_parameters.t_i = np.unique(unique_contrasts[0])
+        head.sequence_parameters.t_i = np.unique(unique_contrasts[0])
 
     # Get number of slices and update mrd header
     nslices = len(unique_slice_locations)
-    mrdhead.encoding[-1].encoded_space.field_of_view_mm.z *= nslices
-    mrdhead.encoding[-1].encoded_space.matrix_size.z *= nslices
+    head.encoding[-1].encoded_space.field_of_view_mm.z *= nslices
+    head.encoding[-1].encoded_space.matrix_size.z *= nslices
 
-    mrdhead.encoding[-1].recon_space.field_of_view_mm.z *= nslices
-    mrdhead.encoding[-1].recon_space.matrix_size.z *= nslices
+    head.encoding[-1].recon_space.field_of_view_mm.z *= nslices
+    head.encoding[-1].recon_space.matrix_size.z *= nslices
 
     # Get vendor as image type map depends on this
     vendor = dsets[0].Manufacturer
@@ -338,11 +338,11 @@ def read_dicom_images(
         return IMTYPE_MAPS["default"][item.ImageType[2][0]]
 
     # get limits
-    mrdhead.encoding[0].encoding_limits.slice.maximum = nslices - 1
-    mrdhead.encoding[0].encoding_limits.slice.center = nslices // 2
+    head.encoding[0].encoding_limits.slice.maximum = nslices - 1
+    head.encoding[0].encoding_limits.slice.center = nslices // 2
 
-    mrdhead.encoding[0].encoding_limits.contrast.maximum = ncontrasts - 1
-    mrdhead.encoding[0].encoding_limits.contrast.center = ncontrasts // 2
+    head.encoding[0].encoding_limits.contrast.maximum = ncontrasts - 1
+    head.encoding[0].encoding_limits.contrast.center = ncontrasts // 2
 
     # Loop over DICOM dataset and build Image
     for n in range(len(dsets)):
@@ -355,20 +355,20 @@ def read_dicom_images(
             image_type = mrd.ImageType.MAGNITUDE
 
         # Initialize current image header
-        head = mrd.ImageHeader(image_type=image_type)
+        image_head = mrd.ImageHeader(image_type=image_type)
 
         # Fill resolution
-        head.field_of_view = (
+        image_head.field_of_view = (
             dset.PixelSpacing[0] * dset.Rows,
             dset.PixelSpacing[1] * dset.Columns,
             dset.SliceThickness,
         )
 
         # Fill position and orientation
-        head.position = tuple(np.stack(dset.ImagePositionPatient))
-        head.line_dir = tuple(np.stack(dset.ImageOrientationPatient[0:3]))
-        head.col_dir = tuple(np.stack(dset.ImageOrientationPatient[3:7]))
-        head.slice_dir = tuple(
+        image_head.position = tuple(np.stack(dset.ImagePositionPatient))
+        image_head.line_dir = tuple(np.stack(dset.ImageOrientationPatient[0:3]))
+        image_head.col_dir = tuple(np.stack(dset.ImageOrientationPatient[3:7]))
+        image_head.slice_dir = tuple(
             np.cross(
                 np.stack(dset.ImageOrientationPatient[0:3]),
                 np.stack(dset.ImageOrientationPatient[3:7]),
@@ -378,7 +378,7 @@ def read_dicom_images(
         # Fill acquisition timestamp
         try:
             acquisition_time = "".join(dset.AcquisitionTime.split(":"))
-            head.acquisition_time_stamp = round(
+            image_head.acquisition_time_stamp = round(
                 (
                     int(acquisition_time[0:2]) * 3600
                     + int(acquisition_time[2:4]) * 60
@@ -393,7 +393,7 @@ def read_dicom_images(
 
         # Fill trigger
         # try:
-        #     head.physiology_time_stamp[0] = round(
+        #     image_head.physiology_time_stamp[0] = round(
         #         int(dset.TriggerTime / 2.5)
         #     )
         # except Exception:
@@ -404,7 +404,7 @@ def read_dicom_images(
             ImaAbsTablePosition = dset.get_private_item(
                 0x0019, 0x13, "SIEMENS MR HEADER"
             ).value
-            head.patient_table_position = (
+            image_head.patient_table_position = (
                 float(ImaAbsTablePosition[0]),
                 float(ImaAbsTablePosition[1]),
                 float(ImaAbsTablePosition[2]),
@@ -413,42 +413,42 @@ def read_dicom_images(
             pass
 
         # Label data
-        head.image_series_index = int(dset.SeriesNumber)
-        head.image_index = int(dset.get("InstanceNumber", 0))
-        head.slice = slice_idx[n]
-        # head.phase = trigger_idx[n]
-        head.contrast = contrast_idx[n]
+        image_head.image_series_index = int(dset.SeriesNumber)
+        image_head.image_index = int(dset.get("InstanceNumber", 0))
+        image_head.slice = slice_idx[n]
+        # image_head.phase = trigger_idx[n]
+        image_head.contrast = contrast_idx[n]
 
-        # Fill current Meta values
-        meta = mrd.ImageMeta()
+        # Fill current image_meta values
+        image_meta = mrd.ImageMeta()
 
         try:
             res = re.search(r"(?<=_v).*$", dset.SequenceName)
             venc = re.search(r"^\d+", dset.group(0))
             dir = re.search(r"(?<=\d)[^\d]*$", res.group(0))
 
-            meta["FlowVelocity"] = float(venc.group(0))
-            meta["FlowDirDisplay"] = VENC_DIR_MAP[dir.group(0)]
+            image_meta["FlowVelocity"] = float(venc.group(0))
+            image_meta["FlowDirDisplay"] = VENC_DIR_MAP[dir.group(0)]
         except Exception:
             pass
 
         try:
-            meta["ImageComments"] = dset.ImageComments
+            image_meta["ImageComments"] = dset.ImageComments
         except Exception:
             pass
 
         try:
-            meta["SeriesDescription"] = dset.SeriesDescription
+            image_meta["SeriesDescription"] = dset.SeriesDescription
         except Exception:
             pass
 
         # Remove pixel data from pydicom class
         try:
-            data = dset.pixel_array.copy().astype(np.float32)
+            image_data = dset.pixel_array.copy().astype(np.float32)
             del dset["PixelData"]
         except Exception:
             try:
-                data = (
+                image_data = (
                     np.frombuffer(dset.FloatPixelData, dtype=np.float32)
                     .copy()
                     .reshape(dset.Rows, dset.Columns)
@@ -456,7 +456,7 @@ def read_dicom_images(
                 del dset["FloatPixelData"]
             except Exception:
                 try:
-                    data = (
+                    image_data = (
                         np.frombuffer(dset.DoubleFloatPixelData, dtype=np.float64)
                         .copy()
                         .astype(np.float32)
@@ -464,17 +464,17 @@ def read_dicom_images(
                     )
                     del dset["DoubleFloatPixelData"]
                 except Exception:
-                    data = None
+                    image_data = None
 
         # Store the complete base64, json-formatted DICOM header so that non-MRD fields can be
         # r ecapitulated when generating DICOMs from MRD images
-        meta["DicomJson"] = base64.b64encode(dset.to_json().encode("utf-8")).decode(
-            "utf-8"
-        )
+        image_meta["DicomJson"] = base64.b64encode(
+            dset.to_json().encode("utf-8")
+        ).decode("utf-8")
 
-        images.append(mrd.Image(head=head, data=data, meta=meta))
+        images.append(mrd.Image(head=image_head, data=image_data, meta=image_meta))
 
-    return images, mrdhead
+    return images, head
 
 
 # %% local utils

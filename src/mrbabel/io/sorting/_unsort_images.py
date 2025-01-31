@@ -37,17 +37,19 @@ def unsort_images(image: mrd.ImageArray, head: mrd.Header) -> list[mrd.Image]:
     # Get axis map
     axis_map = get_user_param(head, "AxisMaps")
 
-    # Unsqueeze dimensions
+    # Search singleton
     axis_size_keys = ["phase", "contrast", "slice", "rows", "columns"]
     axis_size_values = [1, 1, 1, 1, 1]
     axis_size = dict(zip(axis_size_keys, axis_size_values))
     for k, v in axis_map.items():
         axis_size[k] = _data.shape[v]
-
-    # Search singleton
     singleton_axis = np.where(np.asarray(list(axis_size.values())) == 1)[0].tolist()
     singleton_axis = tuple(singleton_axis)
+
+    # Unsqueeze
     _data = np.expand_dims(_data, singleton_axis)
+
+    # Reformat
     _headers = _headers.ravel()
     _meta = _meta.ravel()
 

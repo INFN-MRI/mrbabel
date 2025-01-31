@@ -2,12 +2,15 @@
 
 __all__ = ["get_user_param"]
 
+
+from typing import Any
+
 import mrd
 
 from ._serialization import deserialize_array
 
 
-def get_user_param(head: mrd.Header, key: str):
+def get_user_param(head: mrd.Header, key: str, default: Any = None):
     """
     Search for a given key in mrd.Header UserParameters field.
 
@@ -43,4 +46,4 @@ def get_user_param(head: mrd.Header, key: str):
             for item in head.user_parameters.user_parameter_base64:
                 if item.name == key:
                     return deserialize_array(item.value)
-    return None
+    return default

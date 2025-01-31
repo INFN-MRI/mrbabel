@@ -29,7 +29,7 @@ from ._ismrmd2mrd import read_ismrmrd_header
 
 def read_siemens_header(
     twix_obj: list[dict],
-    hdr_template: mrd.Header | None = None,
+    head_template: mrd.Header | None = None,
     xml_file: str = None,
     xsl_file: str = None,
 ) -> mrd.Header:
@@ -80,15 +80,15 @@ def read_siemens_header(
     )
 
     # update with blueprint
-    if hdr_template is not None:
+    if head_template is not None:
         # replace encoding
-        head.encoding = hdr_template.encoding
+        head.encoding = head_template.encoding
 
         # replace contrast
-        head.sequence_parameters = hdr_template.sequence_parameters
+        head.sequence_parameters = head_template.sequence_parameters
 
         # update user parameters
-        head.user_parameters.extend(hdr_template.user_parameters)
+        head.user_parameters.extend(head_template.user_parameters)
 
     # insert number of dimensions
     if get_user_param(head, "ImagingMode") is None:
@@ -116,9 +116,9 @@ def read_siemens_header(
     return head
 
 
-def _read_siemens_header(twix_hdr: dict, xml_file: str, xsl_file: str) -> mrd.Header:
+def _read_siemens_header(twix_head: dict, xml_file: str, xsl_file: str) -> mrd.Header:
     """Create MRD Header from a Siemens file."""
-    baseline_string = twix_hdr["Meas"]["tBaselineString"]
+    baseline_string = twix_head["Meas"]["tBaselineString"]
 
     # get version
     is_VB = (
@@ -154,7 +154,7 @@ def _read_siemens_header(twix_hdr: dict, xml_file: str, xsl_file: str) -> mrd.He
             )
 
     # convert
-    twix_xml = get_xml_from_siemens(twix_hdr, xml_file)
+    twix_xml = get_xml_from_siemens(twix_head, xml_file)
     ismrmrd_xml = convert_siemens_xml_to_ismrmrd_xml(twix_xml, xsl_file)
 
     with warnings.catch_warnings():
@@ -212,22 +212,22 @@ def read_siemens_acquisitions(
     acquisitions = []
     for idx in range(nmeasurements):
         twix_obj[idx].pop("hdr_str", None)
-        twix_hdr = twix_obj[idx].pop("hdr", None)
+        twix_head = twix_obj[idx].pop("hdr", None)
         twix_acquisitions = list(twix_obj[idx].values())[0].mdb_list
 
         # get acquisitions for current measurement
-        nacquisitions = len(twix_acquisitions)
+        n_acquisitions = len(twix_acquisitions)
         acquisitions.extend(
             [
-                read_siemens_acquisition(twix_acquisitions[n], twix_hdr, idx)
-                for n in range(nacquisitions)
+                read_siemens_acquisition(twix_acquisitions[n], twix_head, idx)
+                for n in range(n_acquisitions)
             ]
         )
 
     # update
     if acquisitions_template is not None:
-        nacquisitions = len(acquisitions)
-        for n in range(nacquisitions):
+        n_acquisitions = len(acquisitions)
+        for n in range(n_acquisitions):
             acquisitions[n].head.flags = acquisitions_template[n].head.flags
             acquisitions[n].head.idx.kspace_encode_step_1 = acquisitions_template[
                 n
@@ -256,11 +256,12 @@ def read_siemens_acquisitions(
     return acquisitions
 
 
-def read_siemens_acquisition(twix_acquisition, twix_hdr, enc_ref) -> mrd.Acquisition:
+def read_siemens_acquisition(twix_acquisition, twix_head, enc_ref) -> mrd.Acquisition:
     """Create MRD Acquisition from a Siemens Acquisition."""
     acquisition = mrd.Acquisition()
 
     # Fill in the header fields
+    # Flags
     defs = mrd.AcquisitionFlags
     if twix_acquisition.mdh.EvalInfoMask & (1 << 25):
         acquisition.head.flags = defs.IS_NOISE_MEASUREMENT
@@ -300,6 +301,7 @@ def read_siemens_acquisition(twix_acquisition, twix_hdr, enc_ref) -> mrd.Acquisi
     if twix_acquisition.mdh.EvalInfoMask & (1 << 46):
         acquisition.head.flags = defs.LAST_IN_MEASUREMENT
 
+    # Encoding Counter
     encoding_counter = mrd.EncodingCounters()
     encoding_counter.kspace_encode_step_1 = twix_acquisition.mdh.Counter.Lin
     encoding_counter.kspace_encode_step_2 = twix_acquisition.mdh.Counter.Par
@@ -328,21 +330,22 @@ def read_siemens_acquisition(twix_acquisition, twix_hdr, enc_ref) -> mrd.Acquisi
     for n in range(twix_acquisition.mdh.UsedChannels):
         acquisition.head.channel_order.append(n)
 
+    # Readout
     acquisition.head.discard_pre = int(twix_acquisition.mdh.CutOff.Pre)
     acquisition.head.discard_post = int(twix_acquisition.mdh.CutOff.Post)
     acquisition.head.center_sample = int(twix_acquisition.mdh.CenterCol)
     acquisition.head.encoding_space_ref = enc_ref
     acquisition.head.sample_time_us = (
-        twix_hdr["MeasYaps"]["sRXSPEC"]["alDwellTime"][0] / 1000.0
+        twix_head["MeasYaps"]["sRXSPEC"]["alDwellTime"][0] / 1000.0
     )
 
+    # Geometry
     position = [
         twix_acquisition.mdh.SliceData.SlicePos.Sag,
         twix_acquisition.mdh.SliceData.SlicePos.Cor,
         twix_acquisition.mdh.SliceData.SlicePos.Tra,
     ]
     acquisition.head.position = position
-
     quaternion = [
         twix_acquisition.mdh.SliceData.Quaternion[1],
         twix_acquisition.mdh.SliceData.Quaternion[2],
@@ -353,7 +356,6 @@ def read_siemens_acquisition(twix_acquisition, twix_hdr, enc_ref) -> mrd.Acquisi
     acquisition.head.read_dir = read_dir
     acquisition.head.phase_dir = phase_dir
     acquisition.head.slice_dir = slice_dir
-
     patient_table_position = [
         twix_acquisition.mdh.PTABPosX,
         twix_acquisition.mdh.PTABPosY,
@@ -361,19 +363,20 @@ def read_siemens_acquisition(twix_acquisition, twix_hdr, enc_ref) -> mrd.Acquisi
     ]
     acquisition.head.patient_table_position = patient_table_position
 
+    # User parameters
     acquisition.head.user_int.extend(list(twix_acquisition.mdh.IceProgramPara[:7]))
     acquisition.head.user_int.append(twix_acquisition.mdh.TimeSinceLastRF)
     acquisition.head.user_float.extend(list(twix_acquisition.mdh.IceProgramPara[8:16]))
 
-    # # Resize the data structure (for example, using numpy arrays or lists)
+    # Data
     acquisition.data = twix_acquisition.data
 
     return acquisition
 
 
 # %% local utils
-def get_xml_from_siemens(twix_hdr, xml_file):
-    raw_head = _parse_hdr(copy.deepcopy(twix_hdr), xml_file)
+def get_xml_from_siemens(twix_head, xml_file):
+    raw_head = _parse_hdr(copy.deepcopy(twix_head), xml_file)
     return _hdr2xml(raw_head, xml_file)
 
 
@@ -429,22 +432,22 @@ def _merge_dicts(dicts):
     return merged_dict
 
 
-def _parse_hdr(twix_hdr, xmlfile):
-    twix_hdr.pop("Config_raw", None)
-    twix_hdr.pop("Dicom_raw", None)
-    twix_hdr.pop("Meas_raw", None)
-    twix_hdr.pop("MeasYaps_raw", None)
-    twix_hdr.pop("Phoenix_raw", None)
-    twix_hdr.pop("Spice_raw", None)
+def _parse_hdr(twix_head, xmlfile):
+    twix_head.pop("Config_raw", None)
+    twix_head.pop("Dicom_raw", None)
+    twix_head.pop("Meas_raw", None)
+    twix_head.pop("MeasYaps_raw", None)
+    twix_head.pop("Phoenix_raw", None)
+    twix_head.pop("Spice_raw", None)
 
     mappings = _parse_xml(xmlfile)
     _raw_hdr = {
-        "Config": twix_hdr["Config"],
-        "Dicom": twix_hdr["Dicom"],
-        "Meas": twix_hdr["Meas"],
-        "MeasYaps": _flatten_dict(twix_hdr["MeasYaps"]),
-        "Phoenix": _flatten_dict(twix_hdr["Phoenix"]),
-        "Spice": twix_hdr["Spice"],
+        "Config": twix_head["Config"],
+        "Dicom": twix_head["Dicom"],
+        "Meas": twix_head["Meas"],
+        "MeasYaps": _flatten_dict(twix_head["MeasYaps"]),
+        "Phoenix": _flatten_dict(twix_head["Phoenix"]),
+        "Spice": twix_head["Spice"],
     }
     _raw_hdr = _merge_dicts(list(_raw_hdr.values()))
 
@@ -461,7 +464,7 @@ def _parse_hdr(twix_hdr, xmlfile):
 
     # manually fix Dwell Time
     hdr["MEAS.sRXSPEC.alDwellTime"] = _raw_hdr["sRXSPEC.alDwellTime.0"]
-    recon_dependencies = twix_hdr["Meas"]["ReconMeasDependencies"].split(" ")
+    recon_dependencies = twix_head["Meas"]["ReconMeasDependencies"].split(" ")
     try:
         hdr["YAPS.ReconMeasDependencies.0"] = int(recon_dependencies[0])
     except Exception:
@@ -475,14 +478,14 @@ def _parse_hdr(twix_hdr, xmlfile):
     except Exception:
         pass
     # # manually fix IRIS and Header
-    hdr["IRIS.DERIVED.phaseOversampling"] = twix_hdr["Meas"]["phaseOversampling"]
-    hdr["IRIS.DERIVED.ImageColumns"] = twix_hdr["Meas"]["ImageColumns"]
-    hdr["IRIS.DERIVED.ImageLines"] = twix_hdr["Meas"]["ImageLines"]
-    hdr["IRIS.RECOMPOSE.PatientID"] = twix_hdr["Meas"]["PatientID"]
-    hdr["IRIS.RECOMPOSE.PatientLOID"] = twix_hdr["Meas"]["PatientLOID"]
-    hdr["IRIS.RECOMPOSE.PatientBirthDay"] = twix_hdr["Meas"]["PatientBirthDay"]
-    hdr["IRIS.RECOMPOSE.StudyLOID"] = twix_hdr["Meas"]["StudyLOID"]
-    hdr["HEADER.MeasUID"] = twix_hdr["Meas"]["MeasUID"]
+    hdr["IRIS.DERIVED.phaseOversampling"] = twix_head["Meas"]["phaseOversampling"]
+    hdr["IRIS.DERIVED.ImageColumns"] = twix_head["Meas"]["ImageColumns"]
+    hdr["IRIS.DERIVED.ImageLines"] = twix_head["Meas"]["ImageLines"]
+    hdr["IRIS.RECOMPOSE.PatientID"] = twix_head["Meas"]["PatientID"]
+    hdr["IRIS.RECOMPOSE.PatientLOID"] = twix_head["Meas"]["PatientLOID"]
+    hdr["IRIS.RECOMPOSE.PatientBirthDay"] = twix_head["Meas"]["PatientBirthDay"]
+    hdr["IRIS.RECOMPOSE.StudyLOID"] = twix_head["Meas"]["StudyLOID"]
+    hdr["HEADER.MeasUID"] = twix_head["Meas"]["MeasUID"]
 
     # # clean-up
     if "YAPS.iMaxNoOfRxChannels" in hdr:
@@ -519,18 +522,18 @@ def _parse_hdr(twix_hdr, xmlfile):
         ]
 
     # clean contrasts
-    ncontrasts = hdr["MEAS.lContrasts"]
+    n_contrasts = hdr["MEAS.lContrasts"]
     if "MEAS.alTR" in hdr:
-        for n in range(ncontrasts, len(hdr["MEAS.alTR"])):
+        for n in range(n_contrasts, len(hdr["MEAS.alTR"])):
             hdr["MEAS.alTR"][n] = 0
     if "MEAS.alTE" in hdr:
-        for n in range(ncontrasts, len(hdr["MEAS.alTE"])):
+        for n in range(n_contrasts, len(hdr["MEAS.alTE"])):
             hdr["MEAS.alTE"][n] = 0
     if "MEAS.alTI" in hdr:
-        for n in range(ncontrasts, len(hdr["MEAS.alTI"])):
+        for n in range(n_contrasts, len(hdr["MEAS.alTI"])):
             hdr["MEAS.alTI"][n] = 0
     if "MEAS.adFlipAngleDegree" in hdr:
-        for n in range(ncontrasts, len(hdr["MEAS.adFlipAngleDegree"])):
+        for n in range(n_contrasts, len(hdr["MEAS.adFlipAngleDegree"])):
             hdr["MEAS.adFlipAngleDegree"] = 0
 
     return hdr
