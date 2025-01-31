@@ -37,6 +37,11 @@ def unsort_kspace(
         for head in buffer.headers:
             scan_count.append(head.scan_counter)
     n_scans = max(scan_count) + 1
+    
+    # Get axis map(s)
+    axis_maps = get_user_param(head, "AxisMaps")
+    if isinstance(axis_maps, dict):
+        axis_maps = [axis_maps]
 
     # Fill acquisitions
     acquisitions = [None] * n_scans
@@ -53,7 +58,7 @@ def unsort_kspace(
         if trajectory.size > 0:
             n_dims = trajectory.shape[-1]
         else:
-            n_dims = get_user_param(head, "ImagingMode", 2)
+            n_dims = int(get_user_param(head, "ImagingMode", "2D")[0])
 
         # Search singleton
         if n_dims == 2:

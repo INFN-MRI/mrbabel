@@ -14,9 +14,9 @@ import nibabel as nib
 
 from ..._file_search import get_paths
 
-from ..converters._dicom2mrd import read_dicom_header, read_dicom_images
+from ..converters._nifti2mrd import read_nifti_header, read_nifti_image
 from ..converters._nifti2dicom import nifti2dicom
-from ..sorting import sort_images
+from ..sorting import unsort_images
 
 
 def read_nifti(
@@ -51,32 +51,18 @@ def read_nifti(
         nii = pool.map(nib.load, nii_paths)
 
     # Convert NIfTI to Dicom
-    dsets = nifti2dicom(nii_paths, nii)
+    nii_data, nii_head = nifti2dicom(nii_paths, nii)
 
-    # Initialize header
-    head = read_dicom_header(dsets[0])
+    # Initialize header from Dicom
+    nii_data, nii_head, head = read_nifti_header(nii_data, nii_head)
 
     # Convert dicoms to MRD
-    images, head = read_dicom_images(dsets, head)
-    head = _convert_sequence_parameters_units(head)
+    image, head = read_nifti_image(nii_data, nii_head, head)
 
     if sort:
-        image, head = sort_images(images, head)
-        image.data = np.flip(image.data.swapaxes(-1, -2), (-2, -1))
         return image, head
+    else:
+        image.data = np.flip(image.data, (-2, -1))
+        images = unsort_images(image, head)
 
     return images, head
-
-
-def _convert_sequence_parameters_units(head: mrd.Header) -> mrd.Header:
-    if head.sequence_parameters:
-        if head.sequence_parameters.t_r.any():
-            head.sequence_parameters.t_r *= 1000.0
-        if head.sequence_parameters.t_e.any():
-            head.sequence_parameters.t_e *= 1000.0
-        if head.sequence_parameters.t_i.any():
-            if np.isclose(head.sequence_parameters.t_i, -1).any():
-                head.sequence_parameters.t_i = []
-            else:
-                head.sequence_parameters.t_i *= 1000.0
-    return head

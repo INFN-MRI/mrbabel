@@ -308,7 +308,7 @@ def read_dicom_images(
     contrasts = np.stack(
         (inversion_times, echo_times, repetition_times, flip_angles), axis=1
     )
-    ncontrasts = contrasts.shape[0]
+    n_contrasts = contrasts.shape[0]
 
     # Get unique contrast and indexes and update mrd header
     unique_contrasts, contrast_idx = _get_unique_contrasts(contrasts)
@@ -319,12 +319,12 @@ def read_dicom_images(
         head.sequence_parameters.t_i = np.unique(unique_contrasts[0])
 
     # Get number of slices and update mrd header
-    nslices = len(unique_slice_locations)
-    head.encoding[-1].encoded_space.field_of_view_mm.z *= nslices
-    head.encoding[-1].encoded_space.matrix_size.z *= nslices
+    n_slices = len(unique_slice_locations)
+    head.encoding[-1].encoded_space.field_of_view_mm.z *= n_slices
+    head.encoding[-1].encoded_space.matrix_size.z *= n_slices
 
-    head.encoding[-1].recon_space.field_of_view_mm.z *= nslices
-    head.encoding[-1].recon_space.matrix_size.z *= nslices
+    head.encoding[-1].recon_space.field_of_view_mm.z *= n_slices
+    head.encoding[-1].recon_space.matrix_size.z *= n_slices
 
     # Get vendor as image type map depends on this
     vendor = dsets[0].Manufacturer
@@ -338,11 +338,11 @@ def read_dicom_images(
         return IMTYPE_MAPS["default"][item.ImageType[2][0]]
 
     # get limits
-    head.encoding[0].encoding_limits.slice.maximum = nslices - 1
-    head.encoding[0].encoding_limits.slice.center = nslices // 2
+    head.encoding[-1].encoding_limits.slice.maximum = n_slices - 1
+    head.encoding[-1].encoding_limits.slice.center = n_slices // 2
 
-    head.encoding[0].encoding_limits.contrast.maximum = ncontrasts - 1
-    head.encoding[0].encoding_limits.contrast.center = ncontrasts // 2
+    head.encoding[-1].encoding_limits.contrast.maximum = n_contrasts - 1
+    head.encoding[-1].encoding_limits.contrast.center = n_contrasts // 2
 
     # Loop over DICOM dataset and build Image
     for n in range(len(dsets)):
@@ -356,6 +356,17 @@ def read_dicom_images(
 
         # Initialize current image header
         image_head = mrd.ImageHeader(image_type=image_type)
+        
+        # Flags
+        defs = mrd.ImageFlags
+        if slice_idx[n] == 0:
+            image_head.flags = defs.FIRST_IN_SLICE
+        if slice_idx[n] == n_slices - 1:
+            image_head.flags = defs.LAST_IN_SLICE
+        if contrast_idx[n] == 0:
+            image_head.flags = defs.FIRST_IN_CONTRAST
+        if contrast_idx[n] == n_contrasts - 1:
+            image_head.flags = defs.LAST_IN_CONTRAST
 
         # Fill resolution
         image_head.field_of_view = (
@@ -467,7 +478,7 @@ def read_dicom_images(
                     image_data = None
 
         # Store the complete base64, json-formatted DICOM header so that non-MRD fields can be
-        # r ecapitulated when generating DICOMs from MRD images
+        # recapitulated when generating DICOMs from MRD images
         image_meta["DicomJson"] = base64.b64encode(
             dset.to_json().encode("utf-8")
         ).decode("utf-8")
@@ -532,7 +543,7 @@ def _get_plane_normal(dsets):
 
 
 def _get_position(dsets):
-    """Return matrix of image position of size (3, nslices)."""
+    """Return matrix of image position of size (3, n_slices)."""
     return np.stack([dset.ImagePositionPatient for dset in dsets], axis=1)
 
 

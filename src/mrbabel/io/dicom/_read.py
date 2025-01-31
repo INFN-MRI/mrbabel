@@ -64,10 +64,6 @@ def read_dicom(
 
     if sort:
         image, head = sort_images(images, head)
-        axis_map = get_user_param(head, "AxisMaps")
-        if "slice" in axis_map:
-            slice_idx = axis_map["slice"]
-            image.data = np.flip(image.data, slice_idx)
         return image, head
 
     return images, head

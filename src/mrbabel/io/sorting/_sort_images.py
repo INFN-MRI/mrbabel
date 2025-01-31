@@ -32,6 +32,7 @@ def sort_images(images: list[mrd.Image], head: mrd.Header) -> mrd.ImageArray:
     _meta = np.asarray([img.meta for img in images])
     _headers = np.asarray([img.head for img in images])
     _data = np.stack([img.data for img in images])
+    _data = _data.astype(np.float32) # cast to single precision
 
     # Get slice idx
     slice_idx = np.asarray([head.slice for head in _headers])
@@ -147,6 +148,9 @@ def sort_images(images: list[mrd.Image], head: mrd.Header) -> mrd.ImageArray:
             data = np.fft.ifft(
                 np.fft.fftshift(np.fft.fft(data, axis=-3), axes=-3), axis=-3
             )
+            
+    # Enforce single precision
+    data = data.astype(np.complex64)
 
     # Add axis map
     axis_map_keys = ["phase", "contrast", "slice", "rows", "columns"]

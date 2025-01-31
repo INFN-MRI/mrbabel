@@ -58,9 +58,12 @@ def sort_kspace(
     axis_maps = []
     for n in range(n_encoded_spaces):
         data = np.stack([d for d in _data[n]])
+        data = data.astype(np.float32) # cast to single precision
         try:
             trajectory = np.stack([traj for traj in _trajectory[n]])
+            trajectory = trajectory.astype(np.float32) # cast to single precision
             density = np.stack([dens for dens in _density[n]])
+            density = density.astype(np.float32) # cast to single precision
         except Exception:
             trajectory = np.asarray([])
             density = np.asarray([])
@@ -70,7 +73,7 @@ def sort_kspace(
         if trajectory.size > 0:
             n_dims = trajectory.shape[-1]
         else:
-            n_dims = get_user_param(head, "ImagingMode", 2)
+            n_dims = int(get_user_param(head, "ImagingMode", "2D")[0])
 
         # Get phase encoding idx
         enc1_idx = np.asarray([head.idx.kspace_encode_step_1 for head in headers])
