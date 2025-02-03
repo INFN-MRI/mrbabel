@@ -290,9 +290,13 @@ def _dump_dicom_image(image, head):
 
     if image_meta.get("RescaleIntercept") is not None:
         dset.RescaleIntercept = image_meta["RescaleIntercept"]
+    else:
+        dset.RescaleIntercept = 0.0
 
     if image_meta.get("RescaleSlope") is not None:
         dset.RescaleSlope = image_meta["RescaleSlope"]
+    else:
+        dset.RescaleSlope = 1.0
 
     if image_meta.get("WindowCenter") is not None:
         dset.WindowCenter = image_meta["WindowCenter"]
