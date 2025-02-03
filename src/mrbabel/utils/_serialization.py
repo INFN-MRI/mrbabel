@@ -57,7 +57,6 @@ def deserialize_array(base64_string: str) -> np.ndarray:
     json_string = json_string.decode("utf-8")
     array_dict = json.loads(json_string)
     try:
-
         if array_dict.get("signature", "") != SIGNATURE:
             raise ValueError("Not a NDArray")
 

@@ -32,7 +32,7 @@ def sort_images(images: list[mrd.Image], head: mrd.Header) -> mrd.ImageArray:
     _meta = np.asarray([img.meta for img in images])
     _headers = np.asarray([img.head for img in images])
     _data = np.stack([img.data for img in images])
-    _data = _data.astype(np.float32) # cast to single precision
+    _data = _data.astype(np.float32)  # cast to single precision
 
     # Get slice idx
     slice_idx = np.asarray([head.slice for head in _headers])
@@ -133,10 +133,11 @@ def sort_images(images: list[mrd.Image], head: mrd.Header) -> mrd.ImageArray:
         if sum(image_types == 3) > 0 and sum(image_types == 4) > 0:
             data = data[2] + 1j * data[3]
         else:
-            if (data[1] > 2 * np.pi).any():
-                data = data[0] * np.exp(1j * (2 * np.pi * data[1] / 4095 - np.pi))
-            else:
-                data = data[0] * np.exp(1j * data[1])
+            mag = data[0].view()
+            phase = data[1].view()
+            phase = (phase - phase.min()) / (phase.max() - phase.min())
+            phase = 2 * np.pi * phase - np.pi
+            data = mag * np.exp(1j * phase)
 
     # Correct phase shift along z for GE systems
     if (
@@ -145,10 +146,13 @@ def sort_images(images: list[mrd.Image], head: mrd.Header) -> mrd.ImageArray:
         and head.acquisition_system_information.system_vendor
     ):
         if "GE" in head.acquisition_system_information.system_vendor.upper():
-            data = np.fft.ifft(
-                np.fft.fftshift(np.fft.fft(data, axis=-3), axes=-3), axis=-3
-            )
-            
+            mag = np.abs(data.view())
+            phase = np.angle(data.view())
+            phase[..., 1::2, :, :] = (
+                (1e5 * (phase[..., 1::2, :, :] + 2 * np.pi)) % (2 * np.pi * 1e5)
+            ) / 1e5 - np.pi
+            data = mag * np.exp(1j * phase)
+
     # Enforce single precision
     data = data.astype(np.complex64)
 

@@ -63,15 +63,13 @@ def nifti2dicom(nii_paths: list[str], nii: list[Nifti1Image]) -> list[pydicom.Da
 
     # Get images
     img = [vol.get_fdata().astype(np.float32) for vol in nii]
-    
+
     # Get parameters from first volume
     idx = 0
     try:
         nii[idx].affine[:2] *= -1
         ndims = int(json[idx]["MRAcquisitionType"][0])
-        iop = np.asarray(json[idx]["ImageOrientationPatientDICOM"]).reshape(
-            2, 3
-        )
+        iop = np.asarray(json[idx]["ImageOrientationPatientDICOM"]).reshape(2, 3)
         scan_orient = detect_scan_orientation(iop)
         if ndims == 2:
             if scan_orient == "ax":
@@ -94,15 +92,13 @@ def nifti2dicom(nii_paths: list[str], nii: list[Nifti1Image]) -> list[pydicom.Da
     nii2dcm_parameters = nii2dcm.nii.Nifti.get_nii2dcm_parameters(nii[idx])
 
     # Fix wrong nii2dcm iop
-    iop = -1 * np.asarray(nii2dcm_parameters["ImageOrientationPatient"]).reshape(
-        2, 3
-    )
+    iop = -1 * np.asarray(nii2dcm_parameters["ImageOrientationPatient"]).reshape(2, 3)
     iop = np.flip(iop, axis=0).ravel()
     nii2dcm_parameters["ImageOrientationPatient"] = iop.tolist()
 
     # Fix wrong nii2dcm ipp (TODO: open PR and fix)
     nii2dcm_parameters = calc_ipp(nii[idx], nii2dcm_parameters)
-    
+
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         dicom = nii2dcm.dcm.DicomMRI("nii2dcm_dicom_mri.dcm")
@@ -116,7 +112,7 @@ def nifti2dicom(nii_paths: list[str], nii: list[Nifti1Image]) -> list[pydicom.Da
             keyword = keyword_for_tag(tag)
             if keyword in json[idx]:
                 setattr(dicom.ds, keyword, json[idx][keyword])
-                
+
     # Update with first instance params
     instance_index = 0
     with warnings.catch_warnings():
@@ -126,11 +122,15 @@ def nifti2dicom(nii_paths: list[str], nii: list[Nifti1Image]) -> list[pydicom.Da
 
     # Instance UID – unique to current slice
     dicom.ds.SOPInstanceUID = pydicom.uid.generate_uid(None)
-                
+
     # Get nifti data and header
-    nii_data = np.stack(img, axis=-1).T # (others, (phases), nz, ny, nx)
-    nii_head = {"json": json, "dset": dicom.ds, "ImagePositionPatient": nii2dcm_parameters["ImagePositionPatient"]}
-                
+    nii_data = np.stack(img, axis=-1).T  # (others, (phases), nz, ny, nx)
+    nii_head = {
+        "json": json,
+        "dset": dicom.ds,
+        "ImagePositionPatient": nii2dcm_parameters["ImagePositionPatient"],
+    }
+
     return nii_data, nii_head
 
     # Fill dicom list
@@ -174,40 +174,40 @@ def nifti2dicom(nii_paths: list[str], nii: list[Nifti1Image]) -> list[pydicom.Da
     #     # fix wrong nii2dcm ipp (TODO: open PR and fix)
     #     nii2dcm_parameters = calc_ipp(nii[idx], nii2dcm_parameters)
 
-        # with warnings.catch_warnings():
-        #     warnings.simplefilter("ignore")
-        #     dicom = nii2dcm.dcm.DicomMRI("nii2dcm_dicom_mri.dcm")
-        #     transfer_nii_hdr_series_tags(dicom, nii2dcm_parameters)
-        #     dicom.ds.BitsAllocated = 32
+    # with warnings.catch_warnings():
+    #     warnings.simplefilter("ignore")
+    #     dicom = nii2dcm.dcm.DicomMRI("nii2dcm_dicom_mri.dcm")
+    #     transfer_nii_hdr_series_tags(dicom, nii2dcm_parameters)
+    #     dicom.ds.BitsAllocated = 32
 
-        # # update from json
-        # with warnings.catch_warnings():
-        #     warnings.simplefilter("ignore")
-        #     for tag in dicom.ds.keys():
-        #         keyword = keyword_for_tag(tag)
-        #         if keyword in json[idx]:
-        #             setattr(dicom.ds, keyword, json[idx][keyword])
+    # # update from json
+    # with warnings.catch_warnings():
+    #     warnings.simplefilter("ignore")
+    #     for tag in dicom.ds.keys():
+    #         keyword = keyword_for_tag(tag)
+    #         if keyword in json[idx]:
+    #             setattr(dicom.ds, keyword, json[idx][keyword])
 
-        #     # update image type
-        #     vendor = dicom.ds.get("Manufacturer", "default")
-        #     if "GE" in vendor.upper():
-        #         dicom.ds.ImageType.insert(2, IMTYPE_MAPS[imtype[idx].name]["default"])
+    #     # update image type
+    #     vendor = dicom.ds.get("Manufacturer", "default")
+    #     if "GE" in vendor.upper():
+    #         dicom.ds.ImageType.insert(2, IMTYPE_MAPS[imtype[idx].name]["default"])
 
-        #     for instance_index in range(0, nii2dcm_parameters["NumberOfInstances"]):
-        #         transfer_nii_hdr_instance_tags(
-        #             dicom, nii2dcm_parameters, instance_index
-        #         )
-        #         setattr(dicom.ds, "InstanceNumber", instance_idx)
+    #     for instance_index in range(0, nii2dcm_parameters["NumberOfInstances"]):
+    #         transfer_nii_hdr_instance_tags(
+    #             dicom, nii2dcm_parameters, instance_index
+    #         )
+    #         setattr(dicom.ds, "InstanceNumber", instance_idx)
 
-        #         # Instance UID – unique to current slice
-        #         dicom.ds.SOPInstanceUID = pydicom.uid.generate_uid(None)
+    #         # Instance UID – unique to current slice
+    #         dicom.ds.SOPInstanceUID = pydicom.uid.generate_uid(None)
 
-        #         # Write pixel data
-        #         dicom.ds.FloatPixelData = img[idx][:, :, instance_index].tobytes()
+    #         # Write pixel data
+    #         dicom.ds.FloatPixelData = img[idx][:, :, instance_index].tobytes()
 
-        #         # append
-        #         dsets.append(copy.deepcopy(dicom.ds))
-        #         instance_idx += 1
+    #         # append
+    #         dsets.append(copy.deepcopy(dicom.ds))
+    #         instance_idx += 1
 
 
 def fnT1N(A, N):

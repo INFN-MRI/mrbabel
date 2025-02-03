@@ -50,13 +50,13 @@ def read_nifti(
     with ThreadPool(multiprocessing.cpu_count()) as pool:
         nii = pool.map(nib.load, nii_paths)
 
-    # Convert NIfTI to Dicom
+    # Get sample DICOM for MRD Header estimation
     nii_data, nii_head = nifti2dicom(nii_paths, nii)
 
-    # Initialize header from Dicom
+    # Initialize header from sample DICOM
     nii_data, nii_head, head = read_nifti_header(nii_data, nii_head)
 
-    # Convert dicoms to MRD
+    # Convert NIfTIs to MRD ImageArray
     image, head = read_nifti_image(nii_data, nii_head, head)
 
     if sort:

@@ -356,7 +356,7 @@ def read_dicom_images(
 
         # Initialize current image header
         image_head = mrd.ImageHeader(image_type=image_type)
-        
+
         # Flags
         defs = mrd.ImageFlags
         if slice_idx[n] == 0:
@@ -453,6 +453,48 @@ def read_dicom_images(
         except Exception:
             pass
 
+        # Get scaling and intercept
+        if "PHILIPS" in vendor.upper():
+            # from https://github.com/rordenlab/dcm2niix/tree/master/Philips
+            # here, we attempt to use, in order, FP, DV, WV to match dcm2niix
+            try:
+                WS = dset[0x0040, 0x9096][0][0x0040, 0x9225].value
+                WI = dset[0x0040, 0x9096][0][0x0040, 0x9224].value
+            except Exception:
+                WS = None
+                WI = None
+            try:
+                RS = dset[0x0040, 0x9096][0][0x0028, 0x1053].value
+                RI = dset[0x0040, 0x9096][0][0x0028, 0x1052].value
+            except Exception:
+                RS = None
+                RI = None
+            try:
+                SS = dset[0x0040, 0x9096][0][0x2005, 0x100E].value
+            except Exception:
+                SS = None
+
+            if RS is not None and RI is not None:
+                if SS is not None:
+                    scl_slope = 1 / float(SS)
+                    scl_inter = float(RI) / (float(RS) * float(SS))
+                else:
+                    scl_slope = float(RS)
+                    scl_inter = float(RI)
+            elif WS is not None and WI is not None:
+                scl_slope = float(WS)
+                scl_inter = float(WI)
+            else:
+                scl_slope = 1.0
+                scl_inter = 0.0
+        else:  # other vendors
+            try:
+                scl_slope = float(dset.RescaleSlope)
+                scl_inter = float(dset.RescaleIntercept)
+            except Exception:
+                scl_slope = 1.0
+                scl_inter = 0.0
+
         # Remove pixel data from pydicom class
         try:
             image_data = dset.pixel_array.copy().astype(np.float32)
@@ -476,6 +518,10 @@ def read_dicom_images(
                     del dset["DoubleFloatPixelData"]
                 except Exception:
                     image_data = None
+
+        # Rescale
+        if image_data is not None:
+            image_data = scl_slope * image_data + scl_inter
 
         # Store the complete base64, json-formatted DICOM header so that non-MRD fields can be
         # recapitulated when generating DICOMs from MRD images

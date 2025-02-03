@@ -37,7 +37,7 @@ def unsort_kspace(
         for head in buffer.headers:
             scan_count.append(head.scan_counter)
     n_scans = max(scan_count) + 1
-    
+
     # Get axis map(s)
     axis_maps = get_user_param(head, "AxisMaps")
     if isinstance(axis_maps, dict):
