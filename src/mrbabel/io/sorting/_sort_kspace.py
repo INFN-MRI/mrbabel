@@ -58,7 +58,7 @@ def sort_kspace(
     axis_maps = []
     for n in range(n_encoded_spaces):
         data = np.stack([d for d in _data[n]])
-        data = data.astype(np.float32)  # cast to single precision
+        data = data.astype(np.complex64)  # cast to single precision
         try:
             trajectory = np.stack([traj for traj in _trajectory[n]])
             trajectory = trajectory.astype(np.float32)  # cast to single precision
