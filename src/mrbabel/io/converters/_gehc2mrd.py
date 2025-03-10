@@ -4,8 +4,6 @@ __all__ = ["GEHCConverter"]
 
 import base64
 
-# import copy
-
 from types import SimpleNamespace
 
 import numpy as np

@@ -5,8 +5,14 @@ __all__ = ["read_ismrmrd"]
 import glob
 import warnings
 
-import ismrmrd
-import ismrmrd.xsd
+try:
+    import ismrmrd
+    import ismrmrd.xsd
+    
+    __ISMRMRD_AVAILABLE__ = True
+except Exception:
+    __ISMRMRD_AVAILABLE__ = False
+
 
 import mrd
 
@@ -51,6 +57,10 @@ def read_ismrmrd(
         MRD Header parsed from ISMRMRD files.
 
     """
+    if __ISMRMRD_AVAILABLE__ is False:
+        print(
+            "ismrmrd not found - install it with pip install ismrmrd"
+        )
     if isinstance(path, str) and path.endswith(".h5"):
         path = glob.glob(path)
     else:

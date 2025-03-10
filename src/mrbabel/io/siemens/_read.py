@@ -6,7 +6,14 @@ import glob
 import warnings
 
 import mrd
-import twixtools
+
+try:
+    import twixtools
+
+    __TWIXTOOLS_AVAILABLE__ = True
+except Exception:
+    __TWIXTOOLS_AVAILABLE__ = False
+
 
 from ..._file_search import get_paths
 
@@ -59,6 +66,10 @@ def read_siemens(
         MRD Header parsed from Siemens files.
 
     """
+    if __TWIXTOOLS_AVAILABLE__ is False:
+        print(
+            "twixtools not found - install it with pip install git+https://github.com/pehses/twixtools.git"
+        )
     if isinstance(path, str) and path.endswith(".dat"):
         path = glob.glob(path)
     else:

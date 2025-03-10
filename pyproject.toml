@@ -40,15 +40,14 @@ classifiers = [  # Optional
 ]
 
 dependencies = [
-"ismrmrd",
 "mrd-python",
-"twixtools @ git+https://github.com/pehses/twixtools.git",
 "pyvoxel",
 "nii2dcm",
-"lxml",
 ]
 
 [project.optional-dependencies] # Optional
+ismrmrd = ["ismrmrd"]
+siemens = ["twixtools @ git+https://github.com/pehses/twixtools.git", "lxml"]
 dev = ["black", "isort", "matplotlib"]
 test = ["pytest", "pytest-black", "pytest-cov", "pytest-sugar", "pytest-xdist"]
 doc = [

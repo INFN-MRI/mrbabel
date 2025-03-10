@@ -4,10 +4,9 @@ __all__ = ["get_paths"]
 
 import os
 import glob
-from typing import List, Union
 
 
-def get_paths(ext: str, parent: Union[str, List[str]], ext2: str = "") -> List[str]:
+def get_paths(ext: str, parent: str | list[str], ext2: str = "") -> list[str]:
     """
     Recursively find all files with a specific extension in the given folder(s) or matching a folder path pattern.
 
@@ -15,7 +14,7 @@ def get_paths(ext: str, parent: Union[str, List[str]], ext2: str = "") -> List[s
     ----------
     ext : str
         The file extension to search for (e.g., "nii").
-    parent : str or list of str
+    parent : str | list of str
         A folder path, a list of folder paths, or a path pattern (e.g., "my_folder/*").
     ext2 : str, optional
         Alternative file extension to search for (e.g., "nii.gz").
