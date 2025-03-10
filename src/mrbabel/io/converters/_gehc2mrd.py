@@ -1,12 +1,10 @@
 """GEHC to MRD Conversion Utilities."""
 
-__all__ = [
-    "read_gehc_header",
-    "read_gehc_acquisitions",
-]
+__all__ = ["GEHCConverter"]
 
 import base64
-import copy
+
+# import copy
 
 from types import SimpleNamespace
 
@@ -20,6 +18,87 @@ from ...utils import get_user_param
 from ._dicom2mrd import read_dicom_header
 
 
+class GEHCConverter:
+    """
+    GEHC to MRD converter.
+
+    Parameters
+    ----------
+    gehc_head : dict
+        Raw GEHC header.
+    head_template : mrd.Header | None, optional
+        Blueprint header loaded from disk.
+        The default is ``None``.
+    acquisitions_template : list[mrd.Acquisition] | None, optional
+        Blueprint acquisition list loaded from disk.
+        he default is ``None``.
+    """
+
+    def __init__(
+        self,
+        gehc_head: dict,
+        head_template: mrd.Header | None = None,
+        acquisitions_template: list[mrd.Acquisition] | None = None,
+    ):
+        """GEHC to MRD converter class. Useful for servers."""
+        self._gehc_head = gehc_head
+        self._head_template = head_template
+        self._acquisitions_template = acquisitions_template
+        self._header = None
+        self._acquisitions = []
+
+        # prepare acquisition reader
+        dset = getools.raw2dicom(gehc_head, False, head_template)
+        n_dims = get_dimension(dset, acquisitions_template)
+        n_views = int(gehc_head["rdb_hdr"]["da_yres"])
+        n_echoes = int(gehc_head["rdb_hdr"]["nechoes"])
+        n_slices = int(gehc_head["rdb_hdr"]["nslices"])
+        center_sample = int(gehc_head["rdb_hdr"]["frame_size"] // 2)
+        vecs = [
+            get_slice_vectors(gehc_head, n)
+            for n in range(len(gehc_head["data_acq_tab"]))
+        ]
+        self._commons = SimpleNamespace(
+            n_dims=n_dims,
+            n_views=n_views,
+            n_echoes=n_echoes,
+            n_slices=n_slices,
+            center_sample=center_sample,
+            vecs=vecs,
+        )
+
+    @property
+    def header(self):  # noqa
+        if self._header is None:
+            self._header = read_gehc_header(
+                self._gehc_head, self._head_template, self._acquisitions_template
+            )
+        return self._header
+
+    @property
+    def acquisitions(self):  # noqa
+        return self._acquisitions
+
+    def read_acquisition(self, input, is_last=False):  # noqa
+        n = len(self._acquisitions)
+        acquisition = read_gehc_acquistion(
+            input,
+            self._gehc_head,
+            self._commons,
+            self._head_template,
+            self._acquisitions_template[n],
+        )
+        if is_last:
+            acquisition.head.flags = mrd.AcquisitionFlags.LAST_IN_MEASUREMENT
+        self._acquisitions.append(acquisition)
+
+    def read_acquisitions(self, input):  # noqa
+        for n in range(len(input)):
+            self.read_acquisition(input[n], n == len(input) - 1)
+        return self.acquisitions
+
+
+# %% Readers
 def read_gehc_header(
     gehc_head: dict,
     head_template: mrd.Header | None = None,
@@ -144,109 +223,9 @@ def read_gehc_header(
     return head
 
 
-def read_gehc_acquisitions(
-    gehc_head, gehc_data, head_template=None, acquisitions_template=None
-):
-    """Create a list of MRD Acquisitions from a list of Siemens Acquisitions."""
-    dset = getools.raw2dicom(gehc_head, False, head_template)
-    n_dims = get_dimension(dset, acquisitions_template)
-    n_views = int(gehc_head["rdb_hdr"]["da_yres"])
-    n_echoes = int(gehc_head["rdb_hdr"]["nechoes"])
-    n_slices = int(gehc_head["rdb_hdr"]["nslices"])
-    n_acquisitions = len(gehc_data)
-    center_sample = int(gehc_head["rdb_hdr"]["frame_size"] // 2)
-    vecs = [
-        get_slice_vectors(gehc_head, n) for n in range(len(gehc_head["data_acq_tab"]))
-    ]
-    commons = SimpleNamespace(
-        n_dims=n_dims,
-        n_views=n_views,
-        n_echoes=n_echoes,
-        n_slices=n_slices,
-        n_frames=n_acquisitions,
-        center_sample=center_sample,
-        vecs=vecs,
-    )
-    acquisitions = [
-        read_gehc_acquistion(gehc_data[n], gehc_head, commons)
-        for n in range(n_acquisitions)
-    ]
-
-    # update
-    if acquisitions_template is not None:
-        psdname = gehc_head["image"]["psd_iname"].strip()
-        is_fidall = (
-            "fidall" in psdname
-            or "3drad" in psdname
-            or "silen" in psdname
-            or "burzte" in psdname
-        )
-
-        # Split echoes along readout
-        if get_user_param(head_template, "ReadoutLength"):
-            data = np.stack([acq.data for acq in acquisitions], axis=0)
-
-            # get actual number of pointes and contrasts
-            n_pts = get_user_param(head_template, "ReadoutLength")
-            n_contrasts = len(np.unique(head_template.sequence_parameters.t_e))
-
-            for n in range(n_acquisitions):
-                acquisitions[n].data = None
-            acquisitions = np.stack(
-                [copy.deepcopy(acquisitions) for n in range(n_contrasts)]
-            ).ravel()
-            n_acquisitions = len(acquisitions)
-
-            data = data[..., :n_pts]
-            data = data.reshape(*data.shape[:-1], n_contrasts, -1)
-            data = data.swapaxes(1, 2)
-            data = data.reshape(-1, *data.shape[-2:])
-            data = np.ascontiguousarray(data)
-
-            for n in range(n_acquisitions):
-                acquisitions[n].data = data[n]
-
-        for n in range(n_acquisitions):
-            acquisitions[n].trajectory = acquisitions_template[n].trajectory
-            acquisitions[n].head.flags = acquisitions_template[n].head.flags
-            acquisitions[n].head.idx.kspace_encode_step_1 = acquisitions_template[
-                n
-            ].head.idx.kspace_encode_step_1
-            acquisitions[n].head.idx.kspace_encode_step_2 = acquisitions_template[
-                n
-            ].head.idx.kspace_encode_step_2
-            acquisitions[n].head.idx.slice = acquisitions_template[n].head.idx.slice
-            acquisitions[n].head.idx.contrast = acquisitions_template[
-                n
-            ].head.idx.contrast
-            acquisitions[n].head.discard_pre = acquisitions_template[n].head.discard_pre
-            if is_fidall:
-                acquisitions[n].head.discard_post = (
-                    acquisitions[n].samples()
-                    - acquisitions_template[n].head.discard_post
-                    - 1
-                )
-            else:
-                acquisitions[n].head.discard_post = acquisitions_template[
-                    n
-                ].head.discard_post
-            acquisitions[n].head.center_sample = acquisitions_template[
-                n
-            ].head.center_sample
-            acquisitions[n].head.encoding_space_ref = acquisitions_template[
-                n
-            ].head.encoding_space_ref
-            acquisitions[n].head.sample_time_us = acquisitions_template[
-                n
-            ].head.sample_time_us
-            acquisitions[n].head.scan_counter = acquisitions_template[
-                n
-            ].head.scan_counter
-
-    return acquisitions
-
-
-def read_gehc_acquistion(gehc_acquisition, gehc_head, common) -> mrd.Acquisition:
+def read_gehc_acquistion(
+    gehc_acquisition, gehc_head, common, head_template=None, acquisition_template=None
+) -> mrd.Acquisition:
     """Create MRD Acquisition from a GEHC Acquisition."""
     acquisition = mrd.Acquisition()
 
@@ -271,8 +250,8 @@ def read_gehc_acquistion(gehc_acquisition, gehc_head, common) -> mrd.Acquisition
         acquisition.head.flags = defs.FIRST_IN_CONTRAST
     if gehc_acquisition.echoNum == common.n_echoes - 1:
         acquisition.head.flags = defs.LAST_IN_CONTRAST
-    if gehc_acquisition.FrameCount == common.n_frames - 1:
-        acquisition.head.flags = defs.LAST_IN_MEASUREMENT
+    # if gehc_acquisition.FrameCount == common.n_frames - 1:
+    #     acquisition.head.flags = defs.LAST_IN_MEASUREMENT
 
     # Encoding Counter
     encoding_counter = mrd.EncodingCounters()
@@ -320,6 +299,55 @@ def read_gehc_acquistion(gehc_acquisition, gehc_head, common) -> mrd.Acquisition
 
     # Data
     acquisition.data = gehc_acquisition.Data
+
+    # Update
+    if acquisition_template is not None:
+        psdname = gehc_head["image"]["psd_iname"].strip()
+        is_fidall = (
+            "fidall" in psdname
+            or "3drad" in psdname
+            or "silen" in psdname
+            or "burzte" in psdname
+        )
+        acquisition.trajectory = acquisition_template.trajectory
+        acquisition.head.flags = acquisition_template.head.flags
+        acquisition.head.idx.kspace_encode_step_1 = (
+            acquisition_template.head.idx.kspace_encode_step_1
+        )
+        acquisition.head.idx.kspace_encode_step_2 = (
+            acquisition_template.head.idx.kspace_encode_step_2
+        )
+        acquisition.head.idx.slice = acquisition_template.head.idx.slice
+        acquisition.head.idx.contrast = acquisition_template.head.idx.contrast
+        acquisition.head.discard_pre = acquisition_template.head.discard_pre
+        if is_fidall:
+            acquisition.head.discard_post = (
+                acquisition.samples() - acquisition_template.head.discard_post - 1
+            )
+        else:
+            acquisition.head.discard_post = acquisition_template.head.discard_post
+        acquisition.head.center_sample = acquisition_template.head.center_sample
+        acquisition.head.encoding_space_ref = (
+            acquisition_template.head.encoding_space_ref
+        )
+        acquisition.head.sample_time_us = acquisition_template.head.sample_time_us
+        acquisition.head.scan_counter = acquisition_template.head.scan_counter
+
+        # Split echoes along readout
+        if get_user_param(head_template, "ReadoutLength"):
+            data = acquisition.data
+
+            # get actual number of pointes and contrasts
+            n_pts = get_user_param(head_template, "ReadoutLength")
+            n_contrasts = len(np.unique(head_template.sequence_parameters.t_e))
+
+            # perform splitting
+            data = data[..., :n_pts]
+            data = data.reshape(*data.shape[:-1], n_contrasts, -1)
+            data = data.swapaxes(1, 2)
+            data = data.reshape(-1, *data.shape[-2:])
+            data = np.ascontiguousarray(data)
+            acquisition.data = data
 
     return acquisition
 

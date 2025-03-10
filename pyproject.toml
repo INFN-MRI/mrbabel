@@ -42,7 +42,7 @@ classifiers = [  # Optional
 dependencies = [
 "ismrmrd",
 "mrd-python",
-"gt-twixtool",
+"twixtools @ git+https://github.com/pehses/twixtools.git",
 "pyvoxel",
 "nii2dcm",
 "lxml",

@@ -16,7 +16,7 @@ except Exception:
 
 from ..._file_search import get_paths
 
-from ..converters._gehc2mrd import read_gehc_header, read_gehc_acquisitions
+from ..converters._gehc2mrd import GEHCConverter
 from ..sorting import sort_kspace
 
 
@@ -72,13 +72,17 @@ def read_gehc(
         )
     path = path[0]
 
-    # reading
+    # raw reader
     gehc_raw, gehc_head = getools.read_rawdata(path, acquisition_order=True)
-    head = read_gehc_header(gehc_head, head_template, acquisitions_template)
-    acquisitions = read_gehc_acquisitions(
-        gehc_head, gehc_raw, head_template, acquisitions_template
-    )
 
+    # prepare converter
+    converter = GEHCConverter(gehc_head, head_template, acquisitions_template)
+
+    # conversion
+    head = converter.header
+    acquisitions = converter.read_acquisitions(gehc_raw)
+
+    # sort if required
     if sort:
         recon_buffers, head = sort_kspace(acquisitions, head)
         return recon_buffers, head
