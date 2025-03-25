@@ -8,7 +8,7 @@ import warnings
 try:
     import ismrmrd
     import ismrmrd.xsd
-    
+
     __ISMRMRD_AVAILABLE__ = True
 except Exception:
     __ISMRMRD_AVAILABLE__ = False
@@ -58,9 +58,7 @@ def read_ismrmrd(
 
     """
     if __ISMRMRD_AVAILABLE__ is False:
-        print(
-            "ismrmrd not found - install it with pip install ismrmrd"
-        )
+        print("ismrmrd not found - install it with pip install ismrmrd")
     if isinstance(path, str) and path.endswith(".h5"):
         path = glob.glob(path)
     else:

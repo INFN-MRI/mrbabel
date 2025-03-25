@@ -17,7 +17,8 @@ except Exception:
 
 from ..._file_search import get_paths
 
-from ..converters._siemens2mrd import read_siemens_header, read_siemens_acquisitions
+if __TWIXTOOLS_AVAILABLE__:
+    from ..converters._siemens2mrd import read_siemens_header, read_siemens_acquisitions
 from ..sorting import sort_kspace
 
 
