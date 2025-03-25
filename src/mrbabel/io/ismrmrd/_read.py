@@ -18,7 +18,8 @@ import mrd
 
 from ..._file_search import get_paths
 
-from ..converters._ismrmd2mrd import read_ismrmrd_header, read_ismrmrd_acquisitions
+if __ISMRMRD_AVAILABLE__:
+    from ..converters._ismrmd2mrd import read_ismrmrd_header, read_ismrmrd_acquisitions
 from ..sorting import sort_kspace
 
 

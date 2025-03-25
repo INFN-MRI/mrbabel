@@ -16,7 +16,8 @@ except Exception:
 
 from ..._file_search import get_paths
 
-from ..converters._gehc2mrd import GEHCConverter
+if __GEHC_AVAILABLE__:
+    from ..converters._gehc2mrd import GEHCConverter
 from ..sorting import sort_kspace
 
 
