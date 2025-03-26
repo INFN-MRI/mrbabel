@@ -3,6 +3,7 @@
 __all__ = ["GEHCConverter"]
 
 import base64
+import copy
 
 from types import SimpleNamespace
 
@@ -43,7 +44,8 @@ class GEHCConverter:
         self._head_template = head_template
         self._acquisitions_template = acquisitions_template
         self._header = None
-        self._acquisitions = []
+        self._acquisitions = None
+        self._acquisitions_list = []
 
         # prepare acquisition reader
         dset = getools.raw2dicom(gehc_head, False, head_template)
@@ -75,20 +77,26 @@ class GEHCConverter:
 
     @property
     def acquisitions(self):  # noqa
+        if self._acquisitions is None:
+            self._acquisitions = fill_acquisitions(
+                self._acquisitions_list,
+                self._acquisitions_template,
+                self._gehc_head,
+                self._head_template,
+            )
+        else:
+            self._acquisitions = self._acquisitions_list
         return self._acquisitions
 
     def read_acquisition(self, input, is_last=False):  # noqa
-        n = len(self._acquisitions)
         acquisition = read_gehc_acquistion(
             input,
             self._gehc_head,
             self._commons,
-            self._head_template,
-            self._acquisitions_template[n],
         )
         if is_last:
             acquisition.head.flags = mrd.AcquisitionFlags.LAST_IN_MEASUREMENT
-        self._acquisitions.append(acquisition)
+        self._acquisitions_list.append(acquisition)
 
     def read_acquisitions(self, input):  # noqa
         for n in range(len(input)):
@@ -146,6 +154,21 @@ def read_gehc_header(
     )
 
     # update with blueprint
+    head = fill_header(head, head_template, gehc_head, dset)
+
+    # insert number of dimensions
+    if get_user_param(head, "ImagingMode") is None:
+        head.user_parameters.user_parameter_string.append(
+            mrd.UserParameterStringType(
+                name="ImagingMode", value=dset.MRAcquisitionType
+            )
+        )
+
+    return head
+
+
+def fill_header(head, head_template, gehc_head, dset):
+    """Update header with pre-defined blueprint."""
     if head_template is not None:
         psdname = gehc_head["image"]["psd_iname"].strip()
         is_fidall = (
@@ -210,20 +233,10 @@ def read_gehc_header(
         else:
             head.user_parameters = head_template.user_parameters
 
-    # insert number of dimensions
-    if get_user_param(head, "ImagingMode") is None:
-        head.user_parameters.user_parameter_string.append(
-            mrd.UserParameterStringType(
-                name="ImagingMode", value=dset.MRAcquisitionType
-            )
-        )
-
     return head
 
 
-def read_gehc_acquistion(
-    gehc_acquisition, gehc_head, common, head_template=None, acquisition_template=None
-) -> mrd.Acquisition:
+def read_gehc_acquistion(gehc_acquisition, gehc_head, common) -> mrd.Acquisition:
     """Create MRD Acquisition from a GEHC Acquisition."""
     acquisition = mrd.Acquisition()
 
@@ -298,8 +311,12 @@ def read_gehc_acquistion(
     # Data
     acquisition.data = gehc_acquisition.Data
 
-    # Update
-    if acquisition_template is not None:
+    return acquisition
+
+
+def fill_acquisitions(acquisitions, acquisitions_template, gehc_head, head_template):
+    n_acquisitions = len(acquisitions)
+    if acquisitions_template is not None:
         psdname = gehc_head["image"]["psd_iname"].strip()
         is_fidall = (
             "fidall" in psdname
@@ -307,47 +324,69 @@ def read_gehc_acquistion(
             or "silen" in psdname
             or "burzte" in psdname
         )
-        acquisition.trajectory = acquisition_template.trajectory
-        acquisition.head.flags = acquisition_template.head.flags
-        acquisition.head.idx.kspace_encode_step_1 = (
-            acquisition_template.head.idx.kspace_encode_step_1
-        )
-        acquisition.head.idx.kspace_encode_step_2 = (
-            acquisition_template.head.idx.kspace_encode_step_2
-        )
-        acquisition.head.idx.slice = acquisition_template.head.idx.slice
-        acquisition.head.idx.contrast = acquisition_template.head.idx.contrast
-        acquisition.head.discard_pre = acquisition_template.head.discard_pre
-        if is_fidall:
-            acquisition.head.discard_post = (
-                acquisition.samples() - acquisition_template.head.discard_post - 1
-            )
-        else:
-            acquisition.head.discard_post = acquisition_template.head.discard_post
-        acquisition.head.center_sample = acquisition_template.head.center_sample
-        acquisition.head.encoding_space_ref = (
-            acquisition_template.head.encoding_space_ref
-        )
-        acquisition.head.sample_time_us = acquisition_template.head.sample_time_us
-        acquisition.head.scan_counter = acquisition_template.head.scan_counter
 
         # Split echoes along readout
         if get_user_param(head_template, "ReadoutLength"):
-            data = acquisition.data
+            data = np.stack([acq.data for acq in acquisitions], axis=0)
 
             # get actual number of pointes and contrasts
             n_pts = get_user_param(head_template, "ReadoutLength")
             n_contrasts = len(np.unique(head_template.sequence_parameters.t_e))
 
-            # perform splitting
+            for n in range(n_acquisitions):
+                acquisitions[n].data = None
+            acquisitions = np.stack(
+                [copy.deepcopy(acquisitions) for n in range(n_contrasts)]
+            ).ravel()
+            n_acquisitions = len(acquisitions)
+
             data = data[..., :n_pts]
             data = data.reshape(*data.shape[:-1], n_contrasts, -1)
             data = data.swapaxes(1, 2)
             data = data.reshape(-1, *data.shape[-2:])
             data = np.ascontiguousarray(data)
-            acquisition.data = data
 
-    return acquisition
+            for n in range(n_acquisitions):
+                acquisitions[n].data = data[n]
+
+        for n in range(n_acquisitions):
+            acquisitions[n].trajectory = acquisitions_template[n].trajectory
+            acquisitions[n].head.flags = acquisitions_template[n].head.flags
+            acquisitions[n].head.idx.kspace_encode_step_1 = acquisitions_template[
+                n
+            ].head.idx.kspace_encode_step_1
+            acquisitions[n].head.idx.kspace_encode_step_2 = acquisitions_template[
+                n
+            ].head.idx.kspace_encode_step_2
+            acquisitions[n].head.idx.slice = acquisitions_template[n].head.idx.slice
+            acquisitions[n].head.idx.contrast = acquisitions_template[
+                n
+            ].head.idx.contrast
+            acquisitions[n].head.discard_pre = acquisitions_template[n].head.discard_pre
+            if is_fidall:
+                acquisitions[n].head.discard_post = (
+                    acquisitions[n].samples()
+                    - acquisitions_template[n].head.discard_post
+                    - 1
+                )
+            else:
+                acquisitions[n].head.discard_post = acquisitions_template[
+                    n
+                ].head.discard_post
+            acquisitions[n].head.center_sample = acquisitions_template[
+                n
+            ].head.center_sample
+            acquisitions[n].head.encoding_space_ref = acquisitions_template[
+                n
+            ].head.encoding_space_ref
+            acquisitions[n].head.sample_time_us = acquisitions_template[
+                n
+            ].head.sample_time_us
+            acquisitions[n].head.scan_counter = acquisitions_template[
+                n
+            ].head.scan_counter
+
+    return acquisitions
 
 
 # %% utils
@@ -460,5 +499,5 @@ def get_dimension(dset, acquisition):
     """Get number of k-space dimensions."""
     if acquisition is not None:
         if acquisition[0].trajectory_dimensions():
-            return acquisition[0].trajectory_dimensions()
+            return acquisition[0].trajectory_dimensions() - 1
     return int(dset.MRAcquisitionType[0])

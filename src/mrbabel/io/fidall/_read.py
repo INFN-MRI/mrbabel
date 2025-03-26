@@ -49,7 +49,7 @@ def read_fidall(
 
     """
     if __GEHC_AVAILABLE__ is False:
-        print(
+        raise ValueError(
             "GEHC reader is private - ask for access at https://docs.google.com/forms/d/1BvA1h8qb9GmndqiXMplQbf3IujgBIehQ1psnfmW0tew/edit"
         )
     meta = getools.fidall.read_method(filepath, dcfpath, methodpath, sliceprofpath)

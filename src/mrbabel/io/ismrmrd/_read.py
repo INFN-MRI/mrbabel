@@ -59,7 +59,7 @@ def read_ismrmrd(
 
     """
     if __ISMRMRD_AVAILABLE__ is False:
-        print("ismrmrd not found - install it with pip install ismrmrd")
+        raise ValueError("ismrmrd not found - install it with 'pip install ismrmrd'")
     if isinstance(path, str) and path.endswith(".h5"):
         path = glob.glob(path)
     else:

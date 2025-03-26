@@ -68,8 +68,8 @@ def read_siemens(
 
     """
     if __TWIXTOOLS_AVAILABLE__ is False:
-        print(
-            "twixtools not found - install it with pip install git+https://github.com/pehses/twixtools.git"
+        raise ValueError(
+            "twixtools not found - install it with 'pip install git+https://github.com/pehses/twixtools.git'"
         )
     if isinstance(path, str) and path.endswith(".dat"):
         path = glob.glob(path)
