@@ -20,6 +20,13 @@ __all__.extend(_geometry.__all__)
 
 # __all__.extend(_serialization.__all__)
 
+from ._shift import *  # noqa
+
+from . import _shift  # noqa
+
+__all__.extend(_shift.__all__)
+
+
 from ._user import *  # noqa
 
 from . import _user  # noqa
