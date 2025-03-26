@@ -112,9 +112,13 @@ def read_fidall(
                 int(enc.encoded_space.matrix_size.z) // 2
             )
 
+    # get number of contrasts
+    ncontrasts = np.max(
+        [len(val) for val in vars(meta.method).values() if val is not None]
+    )
     enc.encoding_limits.contrast = mrd.LimitType()
-    enc.encoding_limits.contrast.maximum = int(meta.traj.shape[-4]) - 1
-    enc.encoding_limits.contrast.center = int(meta.traj.shape[-4]) // 2
+    enc.encoding_limits.contrast.maximum = ncontrasts - 1
+    enc.encoding_limits.contrast.center = ncontrasts // 2
 
     # append
     head.encoding.append(enc)
