@@ -124,7 +124,7 @@ def shift_kspace(
         else:
             shape = np.asarray(shape[::-1], dtype=np.float32)  # (x, y, z)
 
-    # make sure coords is between (-0.5, 0.5)
+    # make sure coords are between (-0.5, 0.5)
     scale = 2 * abs(coords.reshape(-1, ndim)).max(axis=0)
     coords = coords.copy() / scale
     coords = coords.astype(np.float32)
@@ -132,7 +132,8 @@ def shift_kspace(
     # calculate linear phase corresponding to given shift
     # (i.e. Fourier Shift Theorem)
     shift = np.asarray(shift, dtype=np.float32)
-    phase = np.exp(1j * 2 * np.pi * coords * shift).sum(axis=-1)
+    arg = (coords * shift).sum(axis=-1)
+    phase = np.exp(1j * 2 * np.pi * arg)
 
     # apply shift
     output = input * phase
