@@ -211,11 +211,19 @@ def fill_header(head, head_template, gehc_head, dset):
                 # update matrix size
                 encoding[-1].encoded_space.matrix_size.z = nz
                 encoding[-1].recon_space.matrix_size.z = nz
+                
         head.encoding = encoding
 
         # replace contrast
         head.sequence_parameters = head_template.sequence_parameters
-
+        if np.min(head.sequence_parameters.t_r).item() < 1e-3 * gehc_head["image"]["tr"].item():
+           head.sequence_parameters.t_r = np.asarray(head.sequence_parameters.t_r) 
+           head.sequence_parameters.t_r += 1e-3 * gehc_head["image"]["tr"].item()
+           if np.unique(head.sequence_parameters.t_r).size == 1:
+               head.sequence_parameters.t_r = [float(head.sequence_parameters.t_r[0])]
+           else:
+               head.sequence_parameters.t_r = head.sequence_parameters.t_r.tolist()
+           
         # update user parameters
         if is_fidall:
             head.user_parameters.user_parameter_base64.extend(
