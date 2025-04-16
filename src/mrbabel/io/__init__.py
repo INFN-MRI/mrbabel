@@ -43,3 +43,9 @@ from . import gehc  # noqa
 from .gehc import *  # noqa
 
 __all__.extend(gehc.__all__)
+
+from . import _image_builder  # noqa
+
+from ._image_builder import *  # noqa
+
+__all__.extend(_image_builder.__all__)

@@ -165,11 +165,11 @@ def _dump_dicom_image(image, head):
     # Set dset pixel image_data from MRD Image image_data
     dset.Rows = image_data.shape[-2]
     dset.Columns = image_data.shape[-1]
-
+    dset.PixelData = np.squeeze(
+        image_data
+    ).tobytes()  # image_data is [cha z y x] -- squeeze to [y x] for [row col]
     if (image_data.dtype == "uint16") or (image_data.dtype == "int16"):
-        dset.PixelData = np.squeeze(
-            image_data
-        ).tobytes()  # image_data is [cha z y x] -- squeeze to [y x] for [row col]
+        
         dset.BitsAllocated = 16
         dset.BitsStored = 16
         dset.HighBit = 15
@@ -178,23 +178,23 @@ def _dump_dicom_image(image, head):
         or (image_data.dtype == "int32")
         or (image_data.dtype == "int")
     ):
-        dset.PixelData = np.squeeze(
-            image_data
-        ).tobytes()  # image_data is [cha z y x] -- squeeze to [y x] for [row col]
+        # dset.PixelData = np.squeeze(
+        #     image_data
+        # ).tobytes()  # image_data is [cha z y x] -- squeeze to [y x] for [row col]
         dset.BitsAllocated = 32
         dset.BitsStored = 32
         dset.HighBit = 31
     elif image_data.dtype == "float32":
-        dset.FloatPixelData = np.squeeze(
-            image_data
-        ).tobytes()  # image_data is [cha z y x] -- squeeze to [y x] for [row col]
+        # dset.FloatPixelData = np.squeeze(
+        #     image_data
+        # ).tobytes()  # image_data is [cha z y x] -- squeeze to [y x] for [row col]
         dset.BitsAllocated = 32
         dset.BitsStored = 32
         dset.HighBit = 31
     elif image_data.dtype == "float64":
-        dset.DoubleFloatPixelData = np.squeeze(
-            image_data
-        ).tobytes()  # image_data is [cha z y x] -- squeeze to [y x] for [row col]
+        # dset.DoubleFloatPixelData = np.squeeze(
+        #     image_data
+        # ).tobytes()  # image_data is [cha z y x] -- squeeze to [y x] for [row col]
         dset.BitsAllocated = 64
         dset.BitsStored = 64
         dset.HighBit = 63
@@ -234,7 +234,8 @@ def _dump_dicom_image(image, head):
             vendor = "default"
     except Exception:
         vendor = "default"
-    dset.ImageType[2] = IMTYPE_MAPS[image_head.image_type.name][vendor]
+    if vendor != "GE":
+        dset.ImageType[2] = str(IMTYPE_MAPS[image_head.image_type.name][vendor])
     dset.PixelSpacing = [
         float(image_head.field_of_view[0]) / image_data.shape[-2],
         float(image_head.field_of_view[1]) / image_data.shape[-1],
@@ -254,11 +255,14 @@ def _dump_dicom_image(image, head):
         image_head.col_dir[2],
     ]
 
-    time_sec = image_head.acquisition_time_stamp / 1000 / 2.5
-    hour = int(np.floor(time_sec / 3600))
-    min = int(np.floor((time_sec - hour * 3600) / 60))
-    sec = time_sec - hour * 3600 - min * 60
-    dset.AcquisitionTime = "%02.0f%02.0f%09.6f" % (hour, min, sec)
+    try:
+        time_sec = image_head.acquisition_time_stamp / 1000 / 2.5
+        hour = int(np.floor(time_sec / 3600))
+        min = int(np.floor((time_sec - hour * 3600) / 60))
+        sec = time_sec - hour * 3600 - min * 60
+        dset.AcquisitionTime = "%02.0f%02.0f%09.6f" % (hour, min, sec)
+    except Exception:
+        pass
     # dset.TriggerTime = image_head.physiology_time_stamp[0] / 2.5
 
     # ----- Update DICOM header from MRD Image MetaAttributes -----

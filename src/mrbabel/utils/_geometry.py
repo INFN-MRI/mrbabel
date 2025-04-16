@@ -98,7 +98,10 @@ class Geometry:
                 self.patient_position = head.measurement_information.patient_position
 
         # create affine
-        affine = make_nifti_affine(self.shape, positions, orientation, self.voxelsize)
+        try:
+            affine = make_nifti_affine(self.shape, positions, orientation, self.voxelsize)
+        except Exception:
+            affine = None
 
         # flip fov, shape, res to (x,y,z)
         self.fov = self.fov[::-1]
@@ -111,22 +114,25 @@ class Geometry:
 
         # reorient affine
         self.affine = affine
-        if self.dims and self.dims == 2:
-            scan_orient = detect_scan_orientation(orientation)
-            # Axial
-            if scan_orient == "ax":
-                self.affine = reorient_affine(affine, self.shape, "RPS")
-            # Coronal
-            if scan_orient == "cor":
-                self.affine = reorient_affine(affine, self.shape, "RSA")
-            # Sagittal
-            if scan_orient == "sag":
-                self.affine = reorient_affine(affine, self.shape, "ASR")
-            self.affine[:2] *= -1
-        if self.dims and self.dims == 3:
-            self.affine = reorient_affine(affine, self.shape, "LPS")
-            self.affine[:2] *= -1
-        self.affine[self.affine == 0] = 0.0
+        try:
+            if self.dims and self.dims == 2:
+                scan_orient = detect_scan_orientation(orientation)
+                # Axial
+                if scan_orient == "ax":
+                    self.affine = reorient_affine(affine, self.shape, "RPS")
+                # Coronal
+                if scan_orient == "cor":
+                    self.affine = reorient_affine(affine, self.shape, "RSA")
+                # Sagittal
+                if scan_orient == "sag":
+                    self.affine = reorient_affine(affine, self.shape, "ASR")
+                self.affine[:2] *= -1
+            if self.dims and self.dims == 3:
+                self.affine = reorient_affine(affine, self.shape, "LPS")
+                self.affine[:2] *= -1
+            self.affine[self.affine == 0] = 0.0
+        except Exception:
+            self.affine = None
 
     def get_resolution(self, head):
         return _get_resolution(head, self.fov, self.shape)
